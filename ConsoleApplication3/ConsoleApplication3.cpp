@@ -92,29 +92,7 @@ bool downloadFile(const std::string& url, const std::string& outFile) {
 	return false;
 }
 
-/*size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
-	ofstream* ofs = static_cast<ofstream*>(userp);
-	ofs->write(static_cast<char*>(contents), size * nmemb);
-	return size * nmemb;
-}
 
-void downloadFile(const string& url, const std::string& filePath) {
-	CURL* curl;
-	CURLcode res;
-	curl = curl_easy_init();
-	if (curl) {
-		std::ofstream ofs(filePath, std::ios::binary);
-		curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ofs);
-		res = curl_easy_perform(curl);
-		if (res != CURLE_OK) {
-			cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << endl;
-		}
-		curl_easy_cleanup(curl);
-	}
-}
-*/
 void startBreak(Bot& bot, int64_t chatId) {
 	this_thread::sleep_for(chrono::minutes(50));
 	bot.getApi().sendMessage(chatId, "Перерыв окончится через 10 минут.");
@@ -584,20 +562,20 @@ int main()
 
 
 
-
-
-
-
-
-
-
-
 // ЗАВТРА ДОБАВИТЬ это отсчет времени при нажатии на кнопку завершить работу
 
 /*auto fiveHours = std::chrono::hours(5);
 if (totalWorkTime < fiveHours) {
 	message += "\nРаботайте еще";
 }*/
+
+
+
+
+
+
+
+
 
 
 
