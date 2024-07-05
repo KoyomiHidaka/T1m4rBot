@@ -63,8 +63,6 @@ void handleState(const Bot& bot, int64_t userId, Message::Ptr message) {
 	}
 }
 
-
-
 size_t WriteToFile(void* ptr, size_t size, size_t nmemb, FILE* stream) {
 	size_t written = fwrite(ptr, size, nmemb, stream);
 	return written;
@@ -100,23 +98,45 @@ void startBreak(Bot& bot, int64_t chatId) {
 	onBreak = false;
 }
 string formatWorkTime(chrono::milliseconds duration) {
-	auto hours = std::chrono::duration_cast<std::chrono::hours>(duration).count();
-	auto minutes = std::chrono::duration_cast<std::chrono::minutes>(duration % std::chrono::hours(1)).count();
-	auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration % std::chrono::minutes(1)).count();
+	auto hours = chrono::duration_cast<std::chrono::hours>(duration).count();
+	auto minutes = chrono::duration_cast<std::chrono::minutes>(duration % std::chrono::hours(1)).count();
+	auto seconds = chrono::duration_cast<std::chrono::seconds>(duration % std::chrono::minutes(1)).count();
 	auto milliseconds = duration.count() % 1000;
-
+	return to_string(hours) + " ч " + to_string(minutes) + " мин " + to_string(seconds) + " сек";
 	ostringstream oss;
-	oss << setfill('0') << setw(2) << hours << ":"
-		<< setfill('0') << setw(2) << minutes << ":"
-		<< setfill('0') << setw(2) << seconds << "."
-		<< setfill('0') << setw(3) << milliseconds;
+	oss << std::setfill('0') << std::setw(2) << hours << ":"
+		<< std::setfill('0') << std::setw(2) << minutes << ":"
+		<< std::setfill('0') << std::setw(2) << seconds << "."
+		<< std::setfill('0') << std::setw(3) << milliseconds;
 	return oss.str();
 }
+void sendWorkingUsersList(Bot& bot, int64_t chatId) {
+	ostringstream oss;
+	oss << "Список работающих пользователей:\n";
+	for (const auto& entry : isHandlingState) {
+		int64_t userId = entry.first;
+		if (isWorking) {
+			auto now = chrono::system_clock::now();
+			auto workTime = totalWorkTime + chrono::duration_cast<chrono::milliseconds>(now - workStart);
+			oss << userInfo[userId].firstname << userInfo[userId].lastname << "User ID: " << userId << " - Время работы: " << formatWorkTime(workTime) << "\n";
+		}
+	}
+	bot.getApi().sendMessage(chatId, oss.str());
+}
 
+atomic<bool> searching(false);
 
-
-
-
+void performSearch(TgBot::Bot& bot) {
+	while (searching)
+	{
+		this_thread::sleep_for(chrono::seconds(1));
+		totalWorkTime += chrono::seconds(1);
+		if (!searching) {
+			cout << "Stopping search" << endl;
+			break;
+		}
+	}
+}
 
 int main()
 {
@@ -127,7 +147,7 @@ int main()
 		int64_t userId = message->from->id;
 		userStates[userId] = State::START;
 		handleState(bot, userId, message);
-	});
+		});
 
 	bot.getEvents().onAnyMessage([&bot](TgBot::Message::Ptr message) {
 		int64_t userId = message->from->id;
@@ -137,7 +157,7 @@ int main()
 				isHandlingState[userId] = false; // Отключение обработчика после последнего состояния
 			}
 		}
-	});
+		});
 	int64_t lastUpdateId = 0;
 	vector<Update::Ptr> updates = bot.getApi().getUpdates();
 	for (const auto& update : updates) {
@@ -149,68 +169,56 @@ int main()
 	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
 		if (query->data == "start")
 		{
-			if (!isWorking && !onBreak) {
-				workStart = std::chrono::system_clock::now();
-				isWorking = true;
-				onBreak = false;
-				InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
-				InlineKeyboardButton::Ptr button2(new InlineKeyboardButton);
-				button2->text = "Взять перерыв";
-				button2->callbackData = "break";
-				keyboard->inlineKeyboard.push_back({ button2 });
-				bot.getApi().sendMessage(query->message->chat->id, "Работа началась.", false, 0, keyboard);
-				bot.getApi().answerCallbackQuery(query->id, " ", false);
-			}
+			InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
+			InlineKeyboardButton::Ptr button2(new InlineKeyboardButton);
+			button2->text = "Взять перерыв";
+			button2->callbackData = "break";
+			keyboard->inlineKeyboard.push_back({ button2 });
+			bot.getApi().sendMessage(query->message->chat->id, "Работа началась.", false, 0, keyboard);
+			bot.getApi().answerCallbackQuery(query->id, " ", false);
+			searching = true;
+			thread searchThread(performSearch, ref(bot));
+			searchThread.detach();
 		}
-	});
+		});
 	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
 		if (query->data == "break")
 		{
-			if (isWorking) {
-				auto now = std::chrono::system_clock::now();
-				totalWorkTime += std::chrono::duration_cast<std::chrono::milliseconds>(now - workStart);
-				isWorking = false;
-				onBreak = true;
-				breakStart = now;
-				InlineKeyboardMarkup::Ptr perestop(new InlineKeyboardMarkup);
-				InlineKeyboardButton::Ptr pauz1(new InlineKeyboardButton);
-				pauz1->text = "10 минут";
-				pauz1->callbackData = "minut10";
-				InlineKeyboardButton::Ptr pauz2(new InlineKeyboardButton);
-				pauz2->text = "20 минут";
-				pauz2->callbackData = "minut20";
-				InlineKeyboardButton::Ptr pauz3(new InlineKeyboardButton);
-				pauz3->text = "30 минут";
-				pauz3->callbackData = "minut30";
-				InlineKeyboardButton::Ptr pauz4(new InlineKeyboardButton);
-				pauz4->text = "40 минут";
-				pauz4->callbackData = "minut40";
-				InlineKeyboardButton::Ptr pauz5(new InlineKeyboardButton);
-				pauz5->text = "50 минут";
-				pauz5->callbackData = "minut50";
-				InlineKeyboardButton::Ptr pauz6(new InlineKeyboardButton);
-				pauz6->text = "60 минут";
-				pauz6->callbackData = "minut60";
-				perestop->inlineKeyboard.push_back({ pauz1, pauz2, pauz3, pauz4, pauz5, pauz6 });
-				bot.getApi().sendMessage(query->message->chat->id, "Перерыв начался.", false, 0, perestop);
-				bot.getApi().answerCallbackQuery(query->id, " ", false);
+			InlineKeyboardMarkup::Ptr perestop(new InlineKeyboardMarkup);
+			InlineKeyboardButton::Ptr pauz1(new InlineKeyboardButton);
+			pauz1->text = "10 минут";
+			pauz1->callbackData = "minut10";
+			InlineKeyboardButton::Ptr pauz2(new InlineKeyboardButton);
+			pauz2->text = "20 минут";
+			pauz2->callbackData = "minut20";
+			InlineKeyboardButton::Ptr pauz3(new InlineKeyboardButton);
+			pauz3->text = "30 минут";
+			pauz3->callbackData = "minut30";
+			InlineKeyboardButton::Ptr pauz4(new InlineKeyboardButton);
+			pauz4->text = "40 минут";
+			pauz4->callbackData = "minut40";
+			InlineKeyboardButton::Ptr pauz5(new InlineKeyboardButton);
+			pauz5->text = "50 минут";
+			pauz5->callbackData = "minut50";
+			InlineKeyboardButton::Ptr pauz6(new InlineKeyboardButton);
+			pauz6->text = "60 минут";
+			pauz6->callbackData = "minut60";
+			perestop->inlineKeyboard.push_back({ pauz1, pauz2, pauz3, pauz4, pauz5, pauz6 });
+			bot.getApi().sendMessage(query->message->chat->id, "Перерыв начался.", false, 0, perestop);
+			bot.getApi().answerCallbackQuery(query->id, " ", false);
 
-				// Запускаем отдельный поток для отсчета времени перерыва
-				thread(startBreak, std::ref(bot), query->message->chat->id).detach();
-			}
+			// Запускаем отдельный поток для отсчета времени перерыва
+			//thread(startBreak, std::ref(bot), query->message->chat->id).detach();
 		}
-	});
+		});
 	string messagdde = " ";
 	bot.getEvents().onCallbackQuery([&bot, &availablebreak, &messagdde](CallbackQuery::Ptr query) {
 		if (query->data == "minut10")
 		{
 			availablebreak -= 10;
-			auto now = std::chrono::system_clock::now();
-			totalWorkTime += std::chrono::duration_cast<std::chrono::milliseconds>(now - workStart);
-			isWorking = false;
-			onBreak = true;
-			breakStart = now;
-			
+
+			searching = false;
+
 			string workTimeStr = formatWorkTime(totalWorkTime);
 			messagdde = "Общее время работы: " + workTimeStr;
 
@@ -225,17 +233,13 @@ int main()
 				this_thread::sleep_for(chrono::minutes(1));
 				bot.getApi().sendMessage(chat_id, "Перерыв закончился. Возобновите работу нажав Продолжить работу", false, 0, keyboard);
 				onBreak = false;
-			}).detach();
-			
+				}).detach();
 		}
 		if (query->data == "minut20")
 		{
 			availablebreak -= 20;
-			auto now = std::chrono::system_clock::now();
-			totalWorkTime += std::chrono::duration_cast<std::chrono::milliseconds>(now - workStart);
-			isWorking = false;
-			onBreak = true;
-			breakStart = now;
+			searching = false;
+
 			InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
 			InlineKeyboardButton::Ptr button(new InlineKeyboardButton);
 			button->text = "Продолжить работу";
@@ -248,16 +252,13 @@ int main()
 				this_thread::sleep_for(chrono::minutes(20));
 				bot.getApi().sendMessage(chat_id, "Перерыв закончился. Возобновите работу нажав Продолжить работу", false, 0, keyboard);
 				onBreak = false;
-			}).detach();
+				}).detach();
 		}
 		if (query->data == "minut30")
 		{
 			availablebreak -= 30;
-			auto now = std::chrono::system_clock::now();
-			totalWorkTime += std::chrono::duration_cast<std::chrono::milliseconds>(now - workStart);
-			isWorking = false;
-			onBreak = true;
-			breakStart = now;
+			searching = false;
+
 			InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
 			InlineKeyboardButton::Ptr button(new InlineKeyboardButton);
 			button->text = "Продолжить работу";
@@ -269,16 +270,13 @@ int main()
 				this_thread::sleep_for(chrono::minutes(30));
 				bot.getApi().sendMessage(chat_id, "Перерыв закончился. Возобновите работу нажав Продолжить работу", false, 0, keyboard);
 				onBreak = false;
-			}).detach();
+				}).detach();
 		}
 		if (query->data == "minut40")
 		{
 			availablebreak -= 40;
-			auto now = std::chrono::system_clock::now();
-			totalWorkTime += std::chrono::duration_cast<std::chrono::milliseconds>(now - workStart);
-			isWorking = false;
-			onBreak = true;
-			breakStart = now;
+			searching = false;
+
 			InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
 			InlineKeyboardButton::Ptr button(new InlineKeyboardButton);
 			button->text = "Продолжить работу";
@@ -290,16 +288,11 @@ int main()
 				this_thread::sleep_for(chrono::minutes(40));
 				bot.getApi().sendMessage(chat_id, "Перерыв закончился. Возобновите работу нажав Продолжить работу", false, 0, keyboard);
 				onBreak = false;
-			}).detach();
+				}).detach();
 		}
 		if (query->data == "minut50")
 		{
-			availablebreak -= 50;
-			auto now = std::chrono::system_clock::now();
-			totalWorkTime += std::chrono::duration_cast<std::chrono::milliseconds>(now - workStart);
-			isWorking = false;
-			onBreak = true;
-			breakStart = now;
+			searching = false;
 			InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
 			InlineKeyboardButton::Ptr button(new InlineKeyboardButton);
 			button->text = "Продолжить работу";
@@ -311,16 +304,13 @@ int main()
 				this_thread::sleep_for(chrono::minutes(50));
 				bot.getApi().sendMessage(chat_id, "Перерыв закончился. Возобновите работу нажав Продолжить работу", false, 0, keyboard);
 				onBreak = false;
-			}).detach();
+				}).detach();
 		}
 		if (query->data == "minut60")
 		{
 			availablebreak -= 60;
-			auto now = chrono::system_clock::now();
-			totalWorkTime += chrono::duration_cast<chrono::milliseconds>(now - workStart);
-			isWorking = false;
-			onBreak = true;
-			breakStart = now;
+
+			searching = false;
 			InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
 			InlineKeyboardButton::Ptr button(new InlineKeyboardButton);
 			button->text = "Продолжить работу";
@@ -332,16 +322,16 @@ int main()
 				this_thread::sleep_for(chrono::minutes(60));
 				bot.getApi().sendMessage(chat_id, "Перерыв закончился. Возобновите работу нажав Продолжить работу", false, 0, keyboard);
 				onBreak = false;
-			}).detach();
+				}).detach();
 		}
-	});
+		});
 
 	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
 		if (query->data == "continue")
 		{
-			workStart = chrono::system_clock::now();
-			isWorking = true;
-			onBreak = false;
+			searching = true;
+			thread searchThread(performSearch, ref(bot));
+			searchThread.detach();
 			InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
 			InlineKeyboardButton::Ptr button2(new InlineKeyboardButton);
 			button2->text = "Взять перерыв";
@@ -350,16 +340,11 @@ int main()
 			bot.getApi().sendMessage(query->message->chat->id, "Работа началась.", false, 0, keyboard);
 			bot.getApi().answerCallbackQuery(query->id, " ", false);
 		}
-	});
+		});
 
 	bot.getEvents().onCallbackQuery([&bot, &availablebreak](CallbackQuery::Ptr query) {
 		if ((query->data == "break2nd") && (availablebreak == 50))
 		{
-			auto now = chrono::system_clock::now();
-			totalWorkTime += std::chrono::duration_cast<std::chrono::milliseconds>(now - workStart);
-			isWorking = false;
-			onBreak = true;
-			breakStart = now;
 			InlineKeyboardMarkup::Ptr perestop(new InlineKeyboardMarkup);
 			InlineKeyboardButton::Ptr pauz1(new InlineKeyboardButton);
 			pauz1->text = "10 минут";
@@ -379,16 +364,9 @@ int main()
 			perestop->inlineKeyboard.push_back({ pauz1, pauz2, pauz3, pauz4, pauz5 });
 			bot.getApi().sendMessage(query->message->chat->id, "Перерыв начался.", false, 0, perestop);
 			bot.getApi().answerCallbackQuery(query->id, " ", false);
-
-			
 		}
 		if ((query->data == "break2nd") && (availablebreak == 40))
 		{
-			auto now = std::chrono::system_clock::now();
-			totalWorkTime += std::chrono::duration_cast<std::chrono::milliseconds>(now - workStart);
-			isWorking = false;
-			onBreak = true;
-			breakStart = now;
 			InlineKeyboardMarkup::Ptr perestop(new InlineKeyboardMarkup);
 			InlineKeyboardButton::Ptr pauz1(new InlineKeyboardButton);
 			pauz1->text = "10 минут";
@@ -405,16 +383,9 @@ int main()
 			perestop->inlineKeyboard.push_back({ pauz1, pauz2, pauz3, pauz4 });
 			bot.getApi().sendMessage(query->message->chat->id, "Перерыв начался.", false, 0, perestop);
 			bot.getApi().answerCallbackQuery(query->id, " ", false);
-
-		
 		}
 		if ((query->data == "break2nd") && (availablebreak == 30))
 		{
-			auto now = std::chrono::system_clock::now();
-			totalWorkTime += std::chrono::duration_cast<std::chrono::milliseconds>(now - workStart);
-			isWorking = false;
-			onBreak = true;
-			breakStart = now;
 			InlineKeyboardMarkup::Ptr perestop(new InlineKeyboardMarkup);
 			InlineKeyboardButton::Ptr pauz1(new InlineKeyboardButton);
 			pauz1->text = "10 минут";
@@ -428,16 +399,9 @@ int main()
 			perestop->inlineKeyboard.push_back({ pauz1, pauz2, pauz3 });
 			bot.getApi().sendMessage(query->message->chat->id, "Перерыв начался.", false, 0, perestop);
 			bot.getApi().answerCallbackQuery(query->id, " ", false);
-
-			
 		}
 		if ((query->data == "break2nd") && (availablebreak == 20))
 		{
-			auto now = std::chrono::system_clock::now();
-			totalWorkTime += std::chrono::duration_cast<std::chrono::milliseconds>(now - workStart);
-			isWorking = false;
-			onBreak = true;
-			breakStart = now;
 			InlineKeyboardMarkup::Ptr perestop(new InlineKeyboardMarkup);
 			InlineKeyboardButton::Ptr pauz1(new InlineKeyboardButton);
 			pauz1->text = "10 минут";
@@ -448,16 +412,9 @@ int main()
 			perestop->inlineKeyboard.push_back({ pauz1, pauz2 });
 			bot.getApi().sendMessage(query->message->chat->id, "Перерыв начался.", false, 0, perestop);
 			bot.getApi().answerCallbackQuery(query->id, " ", false);
-
-			
 		}
 		if ((query->data == "break2nd") && (availablebreak == 10))
 		{
-			auto now = std::chrono::system_clock::now();
-			totalWorkTime += std::chrono::duration_cast<std::chrono::milliseconds>(now - workStart);
-			isWorking = false;
-			onBreak = true;
-			breakStart = now;
 			InlineKeyboardMarkup::Ptr perestop(new InlineKeyboardMarkup);
 			InlineKeyboardButton::Ptr pauz1(new InlineKeyboardButton);
 			pauz1->text = "10 минут";
@@ -465,16 +422,12 @@ int main()
 			perestop->inlineKeyboard.push_back({ pauz1 });
 			bot.getApi().sendMessage(query->message->chat->id, "Перерыв начался.", false, 0, perestop);
 			bot.getApi().answerCallbackQuery(query->id, " ", false);
-
-			
 		}
 		if ((query->data == "break2nd") && (availablebreak == 0))
 		{
 			bot.getApi().sendMessage(query->message->chat->id, "Доступное время для перерыва закончилось");
 		}
-	});
-
-
+		});
 
 	bot.getEvents().onCommand("send", [&bot](Message::Ptr message) {
 		bot.getApi().sendMessage(message->chat->id, "Send Document");
@@ -509,38 +462,10 @@ int main()
 				}
 			}
 			});
-	});
+		});
 	bot.getEvents().onCommand("w", [&bot](Message::Ptr message) {
-
-		isWorking = false;
-		onBreak = true;
-
-	});
-
-	Message::Ptr message;
-	auto fiveHours = std::chrono::hours(5);
-	if (totalWorkTime == fiveHours) {
-		bot.getApi().sendMessage(message->chat->id, "Рабочий день окончен");
-	}
-
-
-
-	while ((isWorking) && (!onBreak))
-	{
-
-		cout << "CYCLE STARTTTTT";
-		this_thread::sleep_for(chrono::minutes(1));
-		totalWorkTime =+ chrono::minutes(1);
-		if ((!isWorking) && (onBreak))
-		{
-			break;
-			cout << "Cycle Stopped";
-			cout << messagdde;
-			
-		}
-
-	}
-		
+		searching = false;
+		});
 
 	bot.getEvents().onCommand("stop", [&bot, &startingi](Message::Ptr message) {
 		if (message->from->id == adminid) {
@@ -551,23 +476,20 @@ int main()
 		else {
 			bot.getApi().sendMessage(message->chat->id, "У вас недостаточно прав для совершения данной операции");
 		}
-	});
+		});
 
+	bot.getEvents().onCommand("list", [&bot](TgBot::Message::Ptr message) {
+		if (message->from->id == adminid) {
+			sendWorkingUsersList(bot, message->chat->id);
+		}
+		else {
+			bot.getApi().sendMessage(message->chat->id, "У вас нет прав для выполнения этой команды.");
+		}
+		});
 
-
-
-	//Использовать флаги   
-	//Если пользователь находитя в состоянии (работает) ----> if((isWorking == True)&&(onBreak == false)) ----> То с помощью цикла каждую минуту узнавать 
+	//Использовать флаги
+	//Если пользователь находитя в состоянии (работает) ----> if((isWorking == True)&&(onBreak == false)) ----> То с помощью цикла каждую минуту узнавать
 	// текущее время и добавлять к Totalworktime емли пользователь в состоянии отдыха ----> if((onBreak == true)&&(isWorking == false)) ----> то останавливать цикл и перерыв обработать
-
-
-
-
-
-
-
-
-
 
 	try {
 		printf("Bot username: %s\n", bot.getApi().getMe()->username.c_str());
@@ -590,22 +512,9 @@ int main()
 	return 0;
 }
 
-
-
 // ЗАВТРА ДОБАВИТЬ это отсчет времени при нажатии на кнопку завершить работу
 
 /*auto fiveHours = std::chrono::hours(5);
 if (totalWorkTime < fiveHours) {
 	message += "\nРаботайте еще";
 }*/
-
-
-
-
-
-
-
-
-
-
-
