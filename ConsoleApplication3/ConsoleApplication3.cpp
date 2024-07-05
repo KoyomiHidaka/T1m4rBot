@@ -92,7 +92,6 @@ bool downloadFile(const std::string& url, const std::string& outFile) {
 	return false;
 }
 
-
 void startBreak(Bot& bot, int64_t chatId) {
 	this_thread::sleep_for(chrono::minutes(50));
 	bot.getApi().sendMessage(chatId, "Перерыв окончится через 10 минут.");
@@ -100,30 +99,35 @@ void startBreak(Bot& bot, int64_t chatId) {
 	bot.getApi().sendMessage(chatId, "Перерыв закончился. Возобновите работу командой 'Начать'.");
 	onBreak = false;
 }
-std::string formatWorkTime(chrono::milliseconds duration) {
+string formatWorkTime(chrono::milliseconds duration) {
 	auto hours = std::chrono::duration_cast<std::chrono::hours>(duration).count();
 	auto minutes = std::chrono::duration_cast<std::chrono::minutes>(duration % std::chrono::hours(1)).count();
 	auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration % std::chrono::minutes(1)).count();
 	auto milliseconds = duration.count() % 1000;
 
 	ostringstream oss;
-	oss << std::setfill('0') << std::setw(2) << hours << ":"
-		<< std::setfill('0') << std::setw(2) << minutes << ":"
-		<< std::setfill('0') << std::setw(2) << seconds << "."
-		<< std::setfill('0') << std::setw(3) << milliseconds;
+	oss << setfill('0') << setw(2) << hours << ":"
+		<< setfill('0') << setw(2) << minutes << ":"
+		<< setfill('0') << setw(2) << seconds << "."
+		<< setfill('0') << setw(3) << milliseconds;
 	return oss.str();
 }
+
+
+
+
+
 
 int main()
 {
 	int availablebreak = 60;
 	int startingi = 1;
-	Bot bot("7365176474:AAEDErsurbtXg8k8_1s6amX0Przng-QSPKI");
+	Bot bot("7203022991:AAHgQgzs7g0scjPS1zX2xAzL_ZQpTwsie5Q");
 	bot.getEvents().onCommand("start", [&bot](Message::Ptr message) {
 		int64_t userId = message->from->id;
 		userStates[userId] = State::START;
 		handleState(bot, userId, message);
-		});
+	});
 
 	bot.getEvents().onAnyMessage([&bot](TgBot::Message::Ptr message) {
 		int64_t userId = message->from->id;
@@ -133,7 +137,7 @@ int main()
 				isHandlingState[userId] = false; // Отключение обработчика после последнего состояния
 			}
 		}
-		});
+	});
 	int64_t lastUpdateId = 0;
 	vector<Update::Ptr> updates = bot.getApi().getUpdates();
 	for (const auto& update : updates) {
@@ -148,6 +152,7 @@ int main()
 			if (!isWorking && !onBreak) {
 				workStart = std::chrono::system_clock::now();
 				isWorking = true;
+				onBreak = false;
 				InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
 				InlineKeyboardButton::Ptr button2(new InlineKeyboardButton);
 				button2->text = "Взять перерыв";
@@ -157,7 +162,7 @@ int main()
 				bot.getApi().answerCallbackQuery(query->id, " ", false);
 			}
 		}
-		});
+	});
 	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
 		if (query->data == "break")
 		{
@@ -194,9 +199,9 @@ int main()
 				thread(startBreak, std::ref(bot), query->message->chat->id).detach();
 			}
 		}
-		});
-	
-	bot.getEvents().onCallbackQuery([&bot, &availablebreak](CallbackQuery::Ptr query) {
+	});
+	string messagdde = " ";
+	bot.getEvents().onCallbackQuery([&bot, &availablebreak, &messagdde](CallbackQuery::Ptr query) {
 		if (query->data == "minut10")
 		{
 			availablebreak -= 10;
@@ -206,8 +211,8 @@ int main()
 			onBreak = true;
 			breakStart = now;
 			
-			std::string workTimeStr = formatWorkTime(totalWorkTime);
-			std::string messagdde = "Общее время работы: " + workTimeStr;
+			string workTimeStr = formatWorkTime(totalWorkTime);
+			messagdde = "Общее время работы: " + workTimeStr;
 
 			bot.getApi().sendMessage(query->message->chat->id, messagdde);
 			bot.getApi().answerCallbackQuery(query->id, "Перерыв окончится через 10 минут.", false);
@@ -303,7 +308,7 @@ int main()
 			bot.getApi().sendMessage(query->message->chat->id, "Перерыв окончится через 50 минут.");
 			bot.getApi().answerCallbackQuery(query->id, " ", false);
 			thread([&bot, chat_id = query->message->chat->id, keyboard]() {
-				this_thread::sleep_for(chrono::minutes(20));
+				this_thread::sleep_for(chrono::minutes(50));
 				bot.getApi().sendMessage(chat_id, "Перерыв закончился. Возобновите работу нажав Продолжить работу", false, 0, keyboard);
 				onBreak = false;
 			}).detach();
@@ -324,7 +329,7 @@ int main()
 			bot.getApi().sendMessage(query->message->chat->id, "Перерыв окончится через 60 минут.");
 			bot.getApi().answerCallbackQuery(query->id, " ", false);
 			thread([&bot, chat_id = query->message->chat->id, keyboard]() {
-				this_thread::sleep_for(chrono::minutes(20));
+				this_thread::sleep_for(chrono::minutes(60));
 				bot.getApi().sendMessage(chat_id, "Перерыв закончился. Возобновите работу нажав Продолжить работу", false, 0, keyboard);
 				onBreak = false;
 			}).detach();
@@ -335,6 +340,8 @@ int main()
 		if (query->data == "continue")
 		{
 			workStart = chrono::system_clock::now();
+			isWorking = true;
+			onBreak = false;
 			InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
 			InlineKeyboardButton::Ptr button2(new InlineKeyboardButton);
 			button2->text = "Взять перерыв";
@@ -348,7 +355,7 @@ int main()
 	bot.getEvents().onCallbackQuery([&bot, &availablebreak](CallbackQuery::Ptr query) {
 		if ((query->data == "break2nd") && (availablebreak == 50))
 		{
-			auto now = std::chrono::system_clock::now();
+			auto now = chrono::system_clock::now();
 			totalWorkTime += std::chrono::duration_cast<std::chrono::milliseconds>(now - workStart);
 			isWorking = false;
 			onBreak = true;
@@ -373,8 +380,7 @@ int main()
 			bot.getApi().sendMessage(query->message->chat->id, "Перерыв начался.", false, 0, perestop);
 			bot.getApi().answerCallbackQuery(query->id, " ", false);
 
-			// Запускаем отдельный поток для отсчета времени перерыва
-			//thread(startBreak, std::ref(bot), query->message->chat->id).detach();
+			
 		}
 		if ((query->data == "break2nd") && (availablebreak == 40))
 		{
@@ -400,8 +406,7 @@ int main()
 			bot.getApi().sendMessage(query->message->chat->id, "Перерыв начался.", false, 0, perestop);
 			bot.getApi().answerCallbackQuery(query->id, " ", false);
 
-			// Запускаем отдельный поток для отсчета времени перерыва
-			//thread(startBreak, std::ref(bot), query->message->chat->id).detach();
+		
 		}
 		if ((query->data == "break2nd") && (availablebreak == 30))
 		{
@@ -424,8 +429,7 @@ int main()
 			bot.getApi().sendMessage(query->message->chat->id, "Перерыв начался.", false, 0, perestop);
 			bot.getApi().answerCallbackQuery(query->id, " ", false);
 
-			// Запускаем отдельный поток для отсчета времени перерыва
-			//thread(startBreak, std::ref(bot), query->message->chat->id).detach();
+			
 		}
 		if ((query->data == "break2nd") && (availablebreak == 20))
 		{
@@ -445,8 +449,7 @@ int main()
 			bot.getApi().sendMessage(query->message->chat->id, "Перерыв начался.", false, 0, perestop);
 			bot.getApi().answerCallbackQuery(query->id, " ", false);
 
-			// Запускаем отдельный поток для отсчета времени перерыва
-			//thread(startBreak, std::ref(bot), query->message->chat->id).detach();
+			
 		}
 		if ((query->data == "break2nd") && (availablebreak == 10))
 		{
@@ -463,14 +466,15 @@ int main()
 			bot.getApi().sendMessage(query->message->chat->id, "Перерыв начался.", false, 0, perestop);
 			bot.getApi().answerCallbackQuery(query->id, " ", false);
 
-			// Запускаем отдельный поток для отсчета времени перерыва
-			//thread(startBreak, std::ref(bot), query->message->chat->id).detach();
+			
 		}
 		if ((query->data == "break2nd") && (availablebreak == 0))
 		{
 			bot.getApi().sendMessage(query->message->chat->id, "Доступное время для перерыва закончилось");
 		}
-		});
+	});
+
+
 
 	bot.getEvents().onCommand("send", [&bot](Message::Ptr message) {
 		bot.getApi().sendMessage(message->chat->id, "Send Document");
@@ -491,7 +495,7 @@ int main()
 				// Получаем имя файла из сообщения
 				string fileName = message->document->fileName;
 
-				// Путь к папке, где вы хотите сохранять файлы
+				// Путь к папке, где сохранятся файлы
 				string localFolderPath = "C://Users//overs//source//repos//testnewfunctiof//testnewfunctiof//p[ps//";
 
 				// Полный путь к сохраняемому файлу
@@ -505,7 +509,38 @@ int main()
 				}
 			}
 			});
-		});
+	});
+	bot.getEvents().onCommand("w", [&bot](Message::Ptr message) {
+
+		isWorking = false;
+		onBreak = true;
+
+	});
+
+	Message::Ptr message;
+	auto fiveHours = std::chrono::hours(5);
+	if (totalWorkTime == fiveHours) {
+		bot.getApi().sendMessage(message->chat->id, "Рабочий день окончен");
+	}
+
+
+
+	while ((isWorking) && (!onBreak))
+	{
+
+		cout << "CYCLE STARTTTTT";
+		this_thread::sleep_for(chrono::minutes(1));
+		totalWorkTime =+ chrono::minutes(1);
+		if ((!isWorking) && (onBreak))
+		{
+			break;
+			cout << "Cycle Stopped";
+			cout << messagdde;
+			
+		}
+
+	}
+		
 
 	bot.getEvents().onCommand("stop", [&bot, &startingi](Message::Ptr message) {
 		if (message->from->id == adminid) {
@@ -521,7 +556,9 @@ int main()
 
 
 
-
+	//Использовать флаги   
+	//Если пользователь находитя в состоянии (работает) ----> if((isWorking == True)&&(onBreak == false)) ----> То с помощью цикла каждую минуту узнавать 
+	// текущее время и добавлять к Totalworktime емли пользователь в состоянии отдыха ----> if((onBreak == true)&&(isWorking == false)) ----> то останавливать цикл и перерыв обработать
 
 
 
@@ -552,13 +589,6 @@ int main()
 	}
 	return 0;
 }
-
-
-
-
-
-
-
 
 
 
