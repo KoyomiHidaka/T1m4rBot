@@ -12,7 +12,8 @@ bool inRunning = true;
 using namespace TgBot;
 using namespace std;
 
-const int64_t adminid = 869613280;
+const int64_t adminid = 869613280; // Айди админа
+//Данные по пользователю
 chrono::time_point<chrono::system_clock> workStart;
 chrono::time_point<chrono::system_clock> breakStart;
 bool isWorking = false;
@@ -147,7 +148,7 @@ int main()
 		int64_t userId = message->from->id;
 		userStates[userId] = State::START;
 		handleState(bot, userId, message);
-	});
+		});
 
 	bot.getEvents().onAnyMessage([&bot](TgBot::Message::Ptr message) {
 		int64_t userId = message->from->id;
@@ -157,7 +158,7 @@ int main()
 				isHandlingState[userId] = false; // Отключение обработчика после последнего состояния
 			}
 		}
-	});
+		});
 	int64_t lastUpdateId = 0;
 	vector<Update::Ptr> updates = bot.getApi().getUpdates();
 	for (const auto& update : updates) {
@@ -165,7 +166,7 @@ int main()
 			lastUpdateId = update->updateId;
 		}
 	}
-
+	//Начало рабочего дня
 	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
 		if (query->data == "start")
 		{
@@ -184,7 +185,7 @@ int main()
 			thread searchThread(performSearch, ref(bot));
 			searchThread.detach();
 		}
-	});
+		});
 	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
 		if (query->data == "break")
 		{
@@ -214,8 +215,9 @@ int main()
 			// Запускаем отдельный поток для отсчета времени перерыва
 			//thread(startBreak, std::ref(bot), query->message->chat->id).detach();
 		}
-	});
+		});
 	string messagdde = " ";
+	//Перерыв
 	bot.getEvents().onCallbackQuery([&bot, &availablebreak, &messagdde](CallbackQuery::Ptr query) {
 		if (query->data == "minut10")
 		{
@@ -352,8 +354,7 @@ int main()
 				onBreak = false;
 				}).detach();
 		}
-	});
-
+		});
 	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
 		if (query->data == "continue")
 		{
@@ -372,8 +373,8 @@ int main()
 			bot.getApi().sendMessage(query->message->chat->id, "Работа началась.", false, 0, keyboard);
 			bot.getApi().answerCallbackQuery(query->id, " ", false);
 		}
-	});
-
+		});
+	//обработка перерыва
 	bot.getEvents().onCallbackQuery([&bot, &availablebreak](CallbackQuery::Ptr query) {
 		if ((query->data == "break2nd") && (availablebreak == 50))
 		{
@@ -464,46 +465,55 @@ int main()
 			button1->callbackData = "end";
 			keyboard->inlineKeyboard.push_back({ button1 });
 		}
-	});
-
-	bot.getEvents().onCommand("send", [&bot](Message::Ptr message) {
-		bot.getApi().sendMessage(message->chat->id, "Send Document");
-		bot.getEvents().onAnyMessage([&bot](TgBot::Message::Ptr message) {
-			if (message->document) {
-				string fileId = message->document->fileId;
-				cout << "Received file ID: " << fileId << std::endl;
-
-				TgBot::File::Ptr file = bot.getApi().getFile(fileId);
-				if (!file) {
-					bot.getApi().sendMessage(message->chat->id, "Failed to get file info.");
-					return;
-				}
-
-				string fileUrl = "https://api.telegram.org/file/bot" + bot.getToken() + "/" + file->filePath;
-				cout << "File URL: " << fileUrl << std::endl;
-
-				// Получаем имя файла из сообщения
-				string fileName = message->document->fileName;
-
-				// Путь к папке, где сохранятся файлы
-				string localFolderPath = "C://Users//overs//source//repos//testnewfunctiof//testnewfunctiof//p[ps//";
-
-				// Полный путь к сохраняемому файлу
-				string localFilePath = localFolderPath + fileName;
-
-				if (downloadFile(fileUrl, localFilePath)) {
-					bot.getApi().sendMessage(message->chat->id, "File downloaded successfully!");
-				}
-				else {
-					bot.getApi().sendMessage(message->chat->id, "Failed to download the file.");
-				}
-			}
 		});
+
+	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
+
+		if (query->data == "end")
+		{
+			bot.getApi().sendMessage(query->message->chat->id, "Рабочий день окончен, отправьте файлы для оценки");
+
+			bot.getEvents().onAnyMessage([&bot](TgBot::Message::Ptr message) {
+				if (message->document) {
+					string fileId = message->document->fileId;
+					cout << "Received file ID: " << fileId << std::endl;
+
+					TgBot::File::Ptr file = bot.getApi().getFile(fileId);
+					if (!file) {
+						bot.getApi().sendMessage(message->chat->id, "Failed to get file info.");
+						return;
+					}
+
+					string fileUrl = "https://api.telegram.org/file/bot" + bot.getToken() + "/" + file->filePath;
+					cout << "File URL: " << fileUrl << std::endl;
+
+					// Получаем имя файла из сообщения
+					string fileName = message->document->fileName;
+
+					// Путь к папке, где сохранятся файлы
+					string localFolderPath = "C://Users//overs//source//repos//testnewfunctiof//testnewfunctiof//p[ps//";
+
+					// Полный путь к сохраняемому файлу
+					string localFilePath = localFolderPath + fileName;
+
+					if (downloadFile(fileUrl, localFilePath)) {
+						bot.getApi().sendMessage(message->chat->id, "File downloaded successfully!");
+					}
+					else {
+						bot.getApi().sendMessage(message->chat->id, "Failed to download the file.");
+					}
+				}
+			});
+		}
+
+
+
 	});
+	//приостановка цикла
 	bot.getEvents().onCommand("w", [&bot](Message::Ptr message) {
 		searching = false;
-	});
-
+		});
+	//команда стоп которая доступная только для администратора
 	bot.getEvents().onCommand("stop", [&bot, &startingi](Message::Ptr message) {
 		if (message->from->id == adminid) {
 			bot.getApi().sendMessage(message->chat->id, "Программа приостановила свою работу...!");
@@ -513,8 +523,8 @@ int main()
 		else {
 			bot.getApi().sendMessage(message->chat->id, "У вас недостаточно прав для совершения данной операции");
 		}
-	});
-
+		});
+	//команда список, показывается кто работает именно сейчас 
 	bot.getEvents().onCommand("list", [&bot](TgBot::Message::Ptr message) {
 		if (message->from->id == adminid) {
 			sendWorkingUsersList(bot, message->chat->id);
@@ -522,10 +532,10 @@ int main()
 		else {
 			bot.getApi().sendMessage(message->chat->id, "У вас нет прав для выполнения этой команды.");
 		}
-	});
+		});
 
 
-
+	//запуск бота
 	try {
 		printf("Bot username: %s\n", bot.getApi().getMe()->username.c_str());
 		TgLongPoll longPoll(bot, 60, lastUpdateId + 1);
@@ -547,9 +557,3 @@ int main()
 	return 0;
 }
 
-
-
-/*auto fiveHours = std::chrono::hours(5);
-if (totalWorkTime < fiveHours) {
-	message += "\nРаботайте еще";
-}*/
