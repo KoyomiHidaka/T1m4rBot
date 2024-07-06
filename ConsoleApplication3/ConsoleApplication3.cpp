@@ -481,7 +481,6 @@ int main()
 				if (message->document) {
 					string fileId = message->document->fileId;
 					cout << "Received file ID: " << fileId << std::endl;
-
 					TgBot::File::Ptr file = bot.getApi().getFile(fileId);
 					if (!file) {
 						bot.getApi().sendMessage(message->chat->id, "Failed to get file info.");
@@ -499,7 +498,7 @@ int main()
 
 
 					// Путь к папке, где сохранятся файлы
-					string localFolderPath = "V://Projects//testArea//";
+					string localFolderPath = "incoming_files//";
 
 					if (extension == "cpp") {
 						localFolderPath += "cpp-files//";
