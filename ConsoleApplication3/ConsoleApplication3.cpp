@@ -6,11 +6,13 @@
 #include <fstream>
 #include <curl/curl.h>
 #include <iomanip>
+#include <boost/filesystem.hpp>
 #pragma execution_character_set("utf-8")
 
 bool inRunning = true;
 using namespace TgBot;
 using namespace std;
+namespace fs = boost::filesystem;
 
 const int64_t adminid = 869613280; // Айди админа
 //Данные по пользователю
@@ -141,6 +143,7 @@ void performSearch(TgBot::Bot& bot) {
 
 int main()
 {
+	
 	int availablebreak = 60;
 	int startingi = 1;
 	Bot bot("7203022991:AAHgQgzs7g0scjPS1zX2xAzL_ZQpTwsie5Q");
@@ -474,6 +477,7 @@ int main()
 			bot.getApi().sendMessage(query->message->chat->id, "Рабочий день окончен, отправьте файлы для оценки");
 
 			bot.getEvents().onAnyMessage([&bot](TgBot::Message::Ptr message) {
+				
 				if (message->document) {
 					string fileId = message->document->fileId;
 					cout << "Received file ID: " << fileId << std::endl;
@@ -490,8 +494,137 @@ int main()
 					// Получаем имя файла из сообщения
 					string fileName = message->document->fileName;
 
+
+					string extension = fileName.substr(fileName.find_last_of('.') + 1);
+
+
 					// Путь к папке, где сохранятся файлы
-					string localFolderPath = "C://Users//overs//source//repos//testnewfunctiof//testnewfunctiof//p[ps//";
+					string localFolderPath = "V://Projects//testArea//";
+
+					if (extension == "cpp") {
+						localFolderPath += "cpp-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+					if (extension == "py") {
+						localFolderPath += "python-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+					if (extension == "docx") {
+						localFolderPath += "docx-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+					if (extension == "txt") {
+						localFolderPath += "txt-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+					if (extension == "pdf") {
+						localFolderPath += "pdf-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+					if (extension == "js") {
+						localFolderPath += "javascript-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+					if (extension == "jpg") {
+						localFolderPath += "jpg-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+					if (extension == "jpeg") {
+						localFolderPath += "jpeg-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+					if (extension == "png") {
+						localFolderPath += "png-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+					if (extension == "psd") {
+						localFolderPath += "photoshop-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+					if (extension == "ai") {
+						localFolderPath += "Adobe-Illustrator-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+					if (extension == "indd") {
+						localFolderPath += "Adobe-InDesign Document-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+					if (extension == "prproj") {
+						localFolderPath += "Adobe-Premiere-Pro-Project-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+					if(extension == "aep") {
+						localFolderPath += "After-Effects-Project-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+					if (extension == "sesx") {
+						localFolderPath += "Adobe-Audition-Session-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+					if (extension == "html") {
+						localFolderPath += "HTML-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+					if (extension == "css") {
+						localFolderPath += "CSS-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+					if (extension == "cs") {
+						localFolderPath += "C#-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+					if (extension == "java") {
+						localFolderPath += "Java-files//";
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}
+
+					/*else {
+						cout << "Other File";
+						localFolderPath += "others//";
+						// Папка для других файлов
+						if (!fs::exists(localFolderPath)) {
+							fs::create_directories(localFolderPath);
+						}
+					}*/
+
 
 					// Полный путь к сохраняемому файлу
 					string localFilePath = localFolderPath + fileName;
