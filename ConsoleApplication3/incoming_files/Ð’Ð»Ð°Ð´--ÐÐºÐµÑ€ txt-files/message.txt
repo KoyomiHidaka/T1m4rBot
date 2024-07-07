@@ -1,4 +1,4 @@
-﻿#include <iostream>
+#include <iostream>
 #include <tgbot/tgbot.h>
 #include <unordered_map>
 #include <chrono>
@@ -61,8 +61,8 @@ unordered_map<int64_t, UserWork> userWorks;
 
 void handleState(const Bot& bot, int64_t userId, Message::Ptr message) {
 	InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
-	InlineKeyboardButton::Ptr button1(new InlineKeyboardButton);
-	
+	InlineKeyboardButton::Ptr button12(new InlineKeyboardButton);
+	InlineKeyboardButton::Ptr button13(new InlineKeyboardButton);
 	switch (userStates[userId]) {
 	case State::START:
 		bot.getApi().sendMessage(userId, "Введите имя:");
@@ -75,19 +75,27 @@ void handleState(const Bot& bot, int64_t userId, Message::Ptr message) {
 		bot.getApi().sendMessage(userId, "Введите фамилию:");
 		userStates[userId] = State::LAST_NAME;
 		break;
+	case State::CONSUALTATION:
+		button12->text = "Ответить";
+		button12->callbackData = "respond";
+		button13->text = "Заигнорить";
+		button13->callbackData = "reject";
+		keyboard->inlineKeyboard.push_back({ button12 });
+		keyboard->inlineKeyboard.push_back({ button13 });
+		bot.getApi().sendMessage(adminid, "Проблема от пользователя " + to_string(userId) + ": " + message->text, false, 0, keyboard);
+		bot.getApi().sendMessage(userId, "Ваше сообщение отправлено в поддержку.");
+		userStates[userId] = State::START;
+		isHandlingState[userId] = false;
+		break;
 	case State::LAST_NAME:
 		userInfo[userId].lastname = message->text;
 		bot.getApi().sendMessage(userId, "Регистрация завершена!");
+		InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
+		InlineKeyboardButton::Ptr button1(new InlineKeyboardButton);
 		button1->text = "Начать";
 		button1->callbackData = "start";
 		keyboard->inlineKeyboard.push_back({ button1 });
 		bot.getApi().sendMessage(message->chat->id, "Кнопка начать - начнет отчет проведенного времени работы\n Кнопка стоп - Приостановит время и начнет новый таймер отдыха", false, 0, keyboard);
-		userStates[userId] = State::START;
-		isHandlingState[userId] = false;
-		break;
-	case State::CONSUALTATION:
-		bot.getApi().sendMessage(adminid, "Проблема от пользователя " + to_string(userId) + ": " + message->text, false, 0, keyboard);
-		bot.getApi().sendMessage(userId, "Ваше сообщение отправлено в поддержку.");
 		userStates[userId] = State::START;
 		isHandlingState[userId] = false;
 		break;
@@ -196,7 +204,7 @@ void sendWorkingUsersList(Bot& bot, int64_t chatId) {
 }
 
 atomic<bool> searching(false);
-atomic<bool> src(false);
+
 void performSearch(Bot& bot) {
 	while (searching)
 	{
@@ -210,31 +218,39 @@ void performSearch(Bot& bot) {
 }
 
 
-
+//Коментарий к документу отправленному пользователем данный код часть из кода с гпт который я тебе скинул
+/*
+void handleAdminCommands(TgBot::Bot& bot, TgBot::Message::Ptr message) {
+	if (message->text == "/works") {
+		string response = "Список работ:\n";
+		for (const auto& work : userWorks) {
+			response += "Пользователь ID: " + to_string(work.userId) + "\n";
+			response += "Комментарий: " + work.comment + "\n";
+			response += "Оценка: " + to_string(work.rating) + "\n\n";
+		}
+		bot.getApi().sendMessage(message->chat->id, response);
+	}
+}
+*/
 
 
 
 
 //التحقق من مدة عمل البوت !!!!
 void monitorTime(TgBot::Bot& bot, int64_t chatId) {
-	while (src) {
+	while (searching) {
 		//this_thread::sleep_for(chrono::seconds(1));
 		if (totalWorkTime >= chrono::hours(5)) {
 			// Выводим сообщение о завершении рабочего дня
 			bot.getApi().sendMessage(chatId, "Рабочий день завершается. Можно заканчивать работу или продолжить дальше.");
-			src = false;  // Завершаем цикл поиска
+			searching = false;  // Завершаем цикл поиска
 		}
-		if (!src) {
-			cout << "Stopping counting" << endl;
-			break;
-		}
-
 	}
 }
 
 int main()
 {
-	int64_t ussr;
+
 	int availablebreak = 60;
 	int startingi = 1;
 	Bot bot("7203022991:AAHgQgzs7g0scjPS1zX2xAzL_ZQpTwsie5Q");
@@ -260,16 +276,8 @@ int main()
 			lastUpdateId = update->updateId;
 		}
 	}
-	/*ot.getEvents().onCommand("поддержка", [&bot](TgBot::Message::Ptr message) {
-		int64_t ussr = message->from->id;
 
-		cout << ussr;
-		int64_t userId = message->from->id;
-		userInfo[userId].userid = userId;
-		bot.getApi().sendMessage(userId, "Пожалуйста, опишите вашу проблему:");
-		userStates[userId] = State::CONSUALTATION;
-		isHandlingState[userId] = true;
-	});*/
+
 	bot.getEvents().onCommand("work", [&bot](Message::Ptr message) {
 		int64_t userId = message->from->id;
 		if (userId == adminid) {
@@ -280,27 +288,17 @@ int main()
 			bot.getApi().sendMessage(userId, "Вы не являетесь администратором.");
 		}
 	});
-	/*bot.getEvents().onCommand("respond", [&bot](Message::Ptr message) {
-		int64_t userId = message->from->id;
-		if (userId == adminid) {
-			adminStates[userId] = AdminState::TROUBLE;
-			handleUserWork(bot, userId, message);
-		}
-		else {
-			bot.getApi().sendMessage(userId, "Вы не являетесь администратором.");
-		}
-	});*/
 	bot.getEvents().onAnyMessage([&bot](Message::Ptr message) {
 		int64_t userId = message->from->id;
-
+		
 		if (adminStates.find(userId) != adminStates.end()) {
 			handleUserWork(bot, userId, message);
 		}
-	});
-	bot.getEvents().onCallbackQuery([&bot, &ussr](CallbackQuery::Ptr query) {
+		});
+	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
 		int64_t adminId = query->from->id;
 		if (query->data == "sendingReview") {
-
+			
 			string comment = userWorks[adminid].comment;
 			string mark = userWorks[adminid].mark;
 			try {
@@ -311,18 +309,43 @@ int main()
 				bot.getApi().sendMessage(adminId, "Ошибка при отправке сообщения пользователю: " + string(e.what()));
 			}
 		}
-		//if (query->data == "sendRespond") {
-		//	string respond = userWorks[adminid].respond;
-		//	try {
-		//		bot.getApi().sendMessage(userInfo[adminid].userid, "Решение проблемы: " + respond);
-		//		bot.getApi().sendMessage(adminId, "Оценка и комментарий отправлены пользователю.");
-		//	}
-		//	catch (TgException& e) {
-		//		bot.getApi().sendMessage(adminId, "Ошибка при отправке сообщения пользователю: " + string(e.what()));
-		//	}
-		//}
 	});
-		//Начало рабочего дня
+	bot.getEvents().onCommand("respond", [&bot](Message::Ptr message) {
+		int64_t userId = message->from->id;
+		if (userId == adminid) {
+			adminStates[userId] = AdminState::TROUBLE;
+			handleUserWork(bot, userId, message);
+		}
+		else {
+			bot.getApi().sendMessage(userId, "Вы не являетесь администратором.");
+		}
+		});
+	/*bot.getEvents().onAnyMessage([&bot](Message::Ptr message) {
+		int64_t userId = message->from->id;
+
+		if (adminStates.find(userId) != adminStates.end()) {
+			handleUserWork(bot, userId, message);
+		}
+		});*/
+	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
+		int64_t adminId = query->from->id;
+		if (query->data == "sendRespond") {
+			try {
+				bot.getApi().sendMessage(userInfo[adminid].userid, "Решение проблемы: " + userWorks[adminid].respond);
+				bot.getApi().sendMessage(adminId, "Оценка и комментарий отправлены пользователю.");
+			}
+			catch (TgException& e) {
+				bot.getApi().sendMessage(adminId, "Ошибка при отправке сообщения пользователю: " + string(e.what()));
+			}
+		}
+	});
+	bot.getEvents().onCommand("поддержка", [&bot](TgBot::Message::Ptr message) {
+		int64_t userId = message->from->id;
+		bot.getApi().sendMessage(userId, "Пожалуйста, опишите вашу проблему:");
+		userStates[userId] = State::CONSUALTATION;
+		isHandlingState[userId] = true;
+	});
+	//Начало рабочего дня
 	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
 		if (query->data == "start")
 		{
@@ -342,21 +365,21 @@ int main()
 			searching = true;
 			thread searchThread(performSearch, ref(bot));
 			searchThread.detach();
-
-				// تشغيل موضوع للتحقق من الوقت
+			
+			// تشغيل موضوع للتحقق من الوقت
 			thread monitorThread(monitorTime, ref(bot), query->message->chat->id);
 			monitorThread.detach();
-
+			
 		}
 	});
 
 
 	bot.getEvents().onCommand("close", [&bot](Message::Ptr message) {
-		int64_t userId = message->chat->id;
-		if (message->from->id == adminid) {
-			searching = false;
-			bot.getApi().sendMessage(userInfo[userId].userid, "Работа остановлена администратором");
-		}
+		
+		
+
+
+
 	});
 
 	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
@@ -388,9 +411,9 @@ int main()
 			// Запускаем отдельный поток для отсчета времени перерыва
 			//thread(startBreak, std::ref(bot), query->message->chat->id).detach();
 		}
-	});
+		});
 	string messagdde = " ";
-		//Перерыв
+	//Перерыв
 	bot.getEvents().onCallbackQuery([&bot, &availablebreak, &messagdde](CallbackQuery::Ptr query) {
 		if (query->data == "minut10")
 		{
@@ -415,7 +438,7 @@ int main()
 				this_thread::sleep_for(chrono::minutes(1));
 				bot.getApi().sendMessage(chat_id, "Перерыв закончился. Возобновите работу нажав Продолжить работу", false, 0, keyboard);
 				onBreak = false;
-			}).detach();
+				}).detach();
 		}
 		if (query->data == "minut20")
 		{
@@ -438,7 +461,7 @@ int main()
 				this_thread::sleep_for(chrono::minutes(20));
 				bot.getApi().sendMessage(chat_id, "Перерыв закончился. Возобновите работу нажав Продолжить работу", false, 0, keyboard);
 				onBreak = false;
-			}).detach();
+				}).detach();
 		}
 		if (query->data == "minut30")
 		{
@@ -460,72 +483,72 @@ int main()
 				this_thread::sleep_for(chrono::minutes(30));
 				bot.getApi().sendMessage(chat_id, "Перерыв закончился. Возобновите работу нажав Продолжить работу", false, 0, keyboard);
 				onBreak = false;
-			}).detach();
+				}).detach();
 		}
-			if (query->data == "minut40")
-			{
-				availablebreak -= 40;
-				searching = false;
+		if (query->data == "minut40")
+		{
+			availablebreak -= 40;
+			searching = false;
 
-				InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
-				InlineKeyboardButton::Ptr button(new InlineKeyboardButton);
-				button->text = "Продолжить работу";
-				button->callbackData = "continue";
-				keyboard->inlineKeyboard.push_back({ button });
-				InlineKeyboardButton::Ptr button1(new InlineKeyboardButton);
-				button1->text = "Закончить рабочий день";
-				button1->callbackData = "end";
-				keyboard->inlineKeyboard.push_back({ button1 });
-				bot.getApi().sendMessage(query->message->chat->id, "Перерыв окончится через 40 минут.");
-				bot.getApi().answerCallbackQuery(query->id, " ", false);
-				thread([&bot, chat_id = query->message->chat->id, keyboard]() {
-					this_thread::sleep_for(chrono::minutes(40));
-					bot.getApi().sendMessage(chat_id, "Перерыв закончился. Возобновите работу нажав Продолжить работу", false, 0, keyboard);
-					onBreak = false;
-					}).detach();
-			}
-			if (query->data == "minut50")
-			{
-				searching = false;
-				InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
-				InlineKeyboardButton::Ptr button(new InlineKeyboardButton);
-				button->text = "Продолжить работу";
-				button->callbackData = "continue";
-				keyboard->inlineKeyboard.push_back({ button });
-				InlineKeyboardButton::Ptr button1(new InlineKeyboardButton);
-				button1->text = "Закончить рабочий день";
-				button1->callbackData = "end";
-				keyboard->inlineKeyboard.push_back({ button1 });
-				bot.getApi().sendMessage(query->message->chat->id, "Перерыв окончится через 50 минут.");
-				bot.getApi().answerCallbackQuery(query->id, " ", false);
-				thread([&bot, chat_id = query->message->chat->id, keyboard]() {
-					this_thread::sleep_for(chrono::minutes(50));
-					bot.getApi().sendMessage(chat_id, "Перерыв закончился. Возобновите работу нажав Продолжить работу", false, 0, keyboard);
-					onBreak = false;
+			InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
+			InlineKeyboardButton::Ptr button(new InlineKeyboardButton);
+			button->text = "Продолжить работу";
+			button->callbackData = "continue";
+			keyboard->inlineKeyboard.push_back({ button });
+			InlineKeyboardButton::Ptr button1(new InlineKeyboardButton);
+			button1->text = "Закончить рабочий день";
+			button1->callbackData = "end";
+			keyboard->inlineKeyboard.push_back({ button1 });
+			bot.getApi().sendMessage(query->message->chat->id, "Перерыв окончится через 40 минут.");
+			bot.getApi().answerCallbackQuery(query->id, " ", false);
+			thread([&bot, chat_id = query->message->chat->id, keyboard]() {
+				this_thread::sleep_for(chrono::minutes(40));
+				bot.getApi().sendMessage(chat_id, "Перерыв закончился. Возобновите работу нажав Продолжить работу", false, 0, keyboard);
+				onBreak = false;
 				}).detach();
-			}
-			if (query->data == "minut60")
-			{
-				availablebreak -= 60;
+		}
+		if (query->data == "minut50")
+		{
+			searching = false;
+			InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
+			InlineKeyboardButton::Ptr button(new InlineKeyboardButton);
+			button->text = "Продолжить работу";
+			button->callbackData = "continue";
+			keyboard->inlineKeyboard.push_back({ button });
+			InlineKeyboardButton::Ptr button1(new InlineKeyboardButton);
+			button1->text = "Закончить рабочий день";
+			button1->callbackData = "end";
+			keyboard->inlineKeyboard.push_back({ button1 });
+			bot.getApi().sendMessage(query->message->chat->id, "Перерыв окончится через 50 минут.");
+			bot.getApi().answerCallbackQuery(query->id, " ", false);
+			thread([&bot, chat_id = query->message->chat->id, keyboard]() {
+				this_thread::sleep_for(chrono::minutes(50));
+				bot.getApi().sendMessage(chat_id, "Перерыв закончился. Возобновите работу нажав Продолжить работу", false, 0, keyboard);
+				onBreak = false;
+				}).detach();
+		}
+		if (query->data == "minut60")
+		{
+			availablebreak -= 60;
 
-				searching = false;
-				InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
-				InlineKeyboardButton::Ptr button(new InlineKeyboardButton);
-				button->text = "Продолжить работу";
-				button->callbackData = "continue";
-				keyboard->inlineKeyboard.push_back({ button });
-				InlineKeyboardButton::Ptr button1(new InlineKeyboardButton);
-				button1->text = "Закончить рабочий день";
-				button1->callbackData = "end";
-				keyboard->inlineKeyboard.push_back({ button1 });
-				bot.getApi().sendMessage(query->message->chat->id, "Перерыв окончится через 60 минут.");
-				bot.getApi().answerCallbackQuery(query->id, " ", false);
-				thread([&bot, chat_id = query->message->chat->id, keyboard]() {
-					this_thread::sleep_for(chrono::minutes(60));
-					bot.getApi().sendMessage(chat_id, "Перерыв закончился. Возобновите работу нажав Продолжить работу", false, 0, keyboard);
-					onBreak = false;
+			searching = false;
+			InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
+			InlineKeyboardButton::Ptr button(new InlineKeyboardButton);
+			button->text = "Продолжить работу";
+			button->callbackData = "continue";
+			keyboard->inlineKeyboard.push_back({ button });
+			InlineKeyboardButton::Ptr button1(new InlineKeyboardButton);
+			button1->text = "Закончить рабочий день";
+			button1->callbackData = "end";
+			keyboard->inlineKeyboard.push_back({ button1 });
+			bot.getApi().sendMessage(query->message->chat->id, "Перерыв окончится через 60 минут.");
+			bot.getApi().answerCallbackQuery(query->id, " ", false);
+			thread([&bot, chat_id = query->message->chat->id, keyboard]() {
+				this_thread::sleep_for(chrono::minutes(60));
+				bot.getApi().sendMessage(chat_id, "Перерыв закончился. Возобновите работу нажав Продолжить работу", false, 0, keyboard);
+				onBreak = false;
 				}).detach();
-			}
+		}
 	});
 	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
 		if (query->data == "continue")
@@ -551,7 +574,7 @@ int main()
 			}
 		}
 	});
-		//обработка перерыва
+	//обработка перерыва
 	bot.getEvents().onCallbackQuery([&bot, &availablebreak](CallbackQuery::Ptr query) {
 		if ((query->data == "break2nd") && (availablebreak == 50))
 		{
@@ -902,11 +925,11 @@ int main()
 			if (downloadFile(fileUrl, localFilePath)) {
 				cout << "File downloaded successfully!";
 				string workTimeStr = formatWorkTime(totalWorkTime);
-				bot.getApi().sendMessage(adminid, "Пользователь " + userInfo[userId].firstname + " " + userInfo[userId].lastname + " отправил документ: " + fileName + "\n" + messagdde + "Общее время работы: " + workTimeStr);
+				bot.getApi().sendMessage(adminid, "Пользователь " + userInfo[userId].firstname + " " + userInfo[userId].lastname + " отправил документ: " + fileName +"\n"+ messagdde = "Общее время работы: " + workTimeStr);
 				bot.getApi().sendDocument(adminid, fileId);
+				
 
-
-
+				
 
 				bot.getApi().sendMessage(message->chat->id, "Ваша работа принята. Ожидайте оценки и комментария.");
 				bot.getApi().sendMessage(userId, "Документ успешно отправлен администратору.");
@@ -917,9 +940,9 @@ int main()
 			}
 		}
 	});
-
-
 	
+
+
 	//команда стоп которая доступная только для администратора
 	bot.getEvents().onCommand("stop", [&bot, &startingi](Message::Ptr message) {
 		if (message->from->id == adminid) {
@@ -930,7 +953,7 @@ int main()
 		else {
 			bot.getApi().sendMessage(message->chat->id, "У вас недостаточно прав для совершения данной операции");
 		}
-	});
+		});
 	//команда список, показывается кто работает именно сейчас 
 	bot.getEvents().onCommand("list", [&bot](TgBot::Message::Ptr message) {
 		if (message->from->id == adminid) {
