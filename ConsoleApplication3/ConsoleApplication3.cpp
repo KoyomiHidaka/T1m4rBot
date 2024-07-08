@@ -9,7 +9,7 @@
 #include <map>
 #include <boost/filesystem.hpp>
 #pragma execution_character_set("utf-8")
-	
+
 bool inRunning = true;
 using namespace TgBot;
 using namespace std;
@@ -73,14 +73,13 @@ unordered_map<int64_t, SupportRequest> supportRequests; // для хранени
 unordered_map<int64_t, WorkSubmission> workSubmissions;
 int64_t currentEvaluateUserId = 0;
 unordered_map<int64_t, UserState> usserStates;
-unordered_map<int64_t, UserWorkState> userWorkStates;// для хранения состояний пользователей
- // для хранения сообщений поддержки
+unordered_map<int64_t, UserWorkState> userWorkStates;// для хранения состояний пользователей 
 int64_t currentRespondUserId = 0;
 unordered_map<int64_t, State> userStates;
 unordered_map<int64_t, UserInfo> userInfo;
 unordered_map<int64_t, bool> isHandlingState;
-unordered_map<int64_t, bool> isHandlingAdminState;
-unordered_map<int64_t, string> userSupportMessages;
+unordered_map<int64_t, bool> isHandlingAdminState; 
+unordered_map<int64_t, string> userSupportMessages; // для хранения сообщений поддержки
 
 
 void handleState(const Bot& bot, int64_t userId, Message::Ptr message) {
@@ -220,7 +219,7 @@ int main()
 	Bot bot("7203022991:AAHgQgzs7g0scjPS1zX2xAzL_ZQpTwsie5Q");
 
 
-
+	//Команда /start
 	bot.getEvents().onCommand("start", [&bot](Message::Ptr message) {
 
 		if (message->from->id == adminid)
@@ -336,7 +335,7 @@ int main()
 		});
 
 
-	bool questionn = false;
+	/*bool questionn = false;
 
 	bot.getEvents().onCommand("support", [&bot, &questionn](Message::Ptr message) {
 		usserStates[message->chat->id] = AWAITING_SUPPORT_MESSAGE;
@@ -411,7 +410,7 @@ int main()
 		});
 
 
-
+*/
 
 	
 
