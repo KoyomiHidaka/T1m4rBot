@@ -14,7 +14,7 @@ using namespace TgBot;
 using namespace std;
 namespace fs = boost::filesystem;
 
-const int64_t adminid = 1217311673; // Айди админа
+const int64_t adminid = 869613280; // Айди админа
 
 
 
@@ -60,8 +60,6 @@ enum class AdminState {
 	COMMENT,
 	MARK,
 	DONE,
-	TROUBLE,
-	RESPOND
 };
 
 
@@ -77,15 +75,10 @@ struct SupportRequest {
 	bool answered;
 };
 
+
 unordered_map<int64_t, UserState> usserStates; // для хранения состояний пользователей
 unordered_map<int64_t, SupportRequest> supportRequests; // для хранения сообщений поддержки
 int64_t currentRespondUserId = 0;
-
-
-
-
-
-
 unordered_map<int64_t, State> userStates;
 unordered_map<int64_t, AdminState> adminStates;
 unordered_map<int64_t, UserInfo> userInfo;
@@ -93,6 +86,7 @@ unordered_map<int64_t, bool> isHandlingState;
 unordered_map<int64_t, bool> isHandlingAdminState;
 unordered_map<int64_t, UserWork> userWorks;
 unordered_map<int64_t, string> userSupportMessages;
+
 
 void handleState(const Bot& bot, int64_t userId, Message::Ptr message) {
 	switch (userStates[userId]) {
@@ -185,15 +179,15 @@ void startBreak(Bot& bot, int64_t chatId) {
 }
 string formatWorkTime(chrono::milliseconds duration) {
 	auto hours = chrono::duration_cast<std::chrono::hours>(duration).count();
-	auto minutes = chrono::duration_cast<std::chrono::minutes>(duration % std::chrono::hours(1)).count();
-	auto seconds = chrono::duration_cast<std::chrono::seconds>(duration % std::chrono::minutes(1)).count();
+	auto minutes = chrono::duration_cast<std::chrono::minutes>(duration % chrono::hours(1)).count();
+	auto seconds = chrono::duration_cast<std::chrono::seconds>(duration % chrono::minutes(1)).count();
 	auto milliseconds = duration.count() % 1000;
 	return to_string(hours) + " ч " + to_string(minutes) + " мин " + to_string(seconds) + " сек";
 	ostringstream oss;
-	oss << std::setfill('0') << std::setw(2) << hours << ":"
-		<< std::setfill('0') << std::setw(2) << minutes << ":"
-		<< std::setfill('0') << std::setw(2) << seconds << "."
-		<< std::setfill('0') << std::setw(3) << milliseconds;
+	oss << setfill('0') << setw(2) << hours << ":"
+		<< setfill('0') << setw(2) << minutes << ":"
+		<< setfill('0') << setw(2) << seconds << "."
+		<< setfill('0') << setw(3) << milliseconds;
 	return oss.str();
 }
 void sendWorkingUsersList(Bot& bot, int64_t chatId) {
@@ -346,7 +340,7 @@ int main()
 		keyboard->inlineKeyboard.push_back(row);
 
 		bot.getApi().sendMessage(message->chat->id, "Пожалуйста, выберите пользователя, которому вы хотите ответить:", false, 0, keyboard);
-		});
+	});
 
 	// Обработка нажатий inline-кнопок
 	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
