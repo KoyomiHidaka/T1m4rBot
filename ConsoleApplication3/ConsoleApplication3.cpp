@@ -73,7 +73,8 @@ enum UserState {
 
 struct SupportRequest {
 	int64_t userId;
-	std::string message;
+	string message;
+	bool answered;
 };
 
 unordered_map<int64_t, UserState> usserStates; // для хранения состояний пользователей
@@ -307,15 +308,15 @@ int main()
 
 
 
-	bot.getEvents().onCommand("support", [&bot](TgBot::Message::Ptr message) {
+	bot.getEvents().onCommand("support", [&bot](Message::Ptr message) {
 		usserStates[message->chat->id] = AWAITING_SUPPORT_MESSAGE;
 		bot.getApi().sendMessage(message->chat->id, "Пожалуйста, введите ваше сообщение для поддержки.");
 		});
 
 	// Обработка текстовых сообщений пользователей
-	bot.getEvents().onAnyMessage([&bot](TgBot::Message::Ptr message) {
+	bot.getEvents().onAnyMessage([&bot](Message::Ptr message) {
 		if (usserStates[message->chat->id] == AWAITING_SUPPORT_MESSAGE) {
-			std::string supportMessage = message->text;
+			string supportMessage = message->text;
 			supportRequests[message->chat->id] = { message->chat->id, supportMessage };
 			usserStates[message->chat->id] = NONE;
 
@@ -325,20 +326,22 @@ int main()
 		});
 
 	// Команда /respond для админа
-	bot.getEvents().onCommand("respond", [&bot](TgBot::Message::Ptr message) {
+	bot.getEvents().onCommand("respond", [&bot](Message::Ptr message) {
 		if (message->chat->id != adminid) {
 			bot.getApi().sendMessage(message->chat->id, "Эта команда доступна только для админа.");
 			return;
 		}
 
 		// Создание inline-кнопок для выбора пользователя
-		TgBot::InlineKeyboardMarkup::Ptr keyboard(new TgBot::InlineKeyboardMarkup);
-		std::vector<TgBot::InlineKeyboardButton::Ptr> row;
+		InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
+		vector<InlineKeyboardButton::Ptr> row;
 		for (const auto& request : supportRequests) {
-			TgBot::InlineKeyboardButton::Ptr button(new TgBot::InlineKeyboardButton);
-			button->text = "ID: " + std::to_string(request.first);
-			button->callbackData = std::to_string(request.first);
-			row.push_back(button);
+			if (!request.second.answered) { // добавление кнопки только если ответ не был отправлен
+				InlineKeyboardButton::Ptr button(new InlineKeyboardButton);
+				button->text = "ID: " + to_string(request.first);
+				button->callbackData = to_string(request.first);
+				row.push_back(button);
+			}
 		}
 		keyboard->inlineKeyboard.push_back(row);
 
@@ -346,25 +349,30 @@ int main()
 		});
 
 	// Обработка нажатий inline-кнопок
-	bot.getEvents().onCallbackQuery([&bot](TgBot::CallbackQuery::Ptr query) {
+	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
 		if (query->message->chat->id == adminid) {
-			currentRespondUserId = std::stoll(query->data);
+			currentRespondUserId = stoll(query->data);
 			if (supportRequests.find(currentRespondUserId) != supportRequests.end()) {
 				usserStates[query->message->chat->id] = AWAITING_RESPONSE_MESSAGE;
-				bot.getApi().sendMessage(query->message->chat->id, "Введите ваш ответ пользователю с ID " + std::to_string(currentRespondUserId) + ".");
+				bot.getApi().sendMessage(query->message->chat->id, "Введите ваш ответ пользователю с ID " + to_string(currentRespondUserId) + ".");
 			}
 			else {
-				bot.getApi().sendMessage(query->message->chat->id, "Обращение от пользователя с ID " + std::to_string(currentRespondUserId) + " не найдено.");
+				bot.getApi().sendMessage(query->message->chat->id, "Обращение от пользователя с ID " + to_string(currentRespondUserId) + " не найдено.");
 			}
 		}
 		});
 
 	// Обработка текстовых сообщений от админа
-	bot.getEvents().onAnyMessage([&bot](TgBot::Message::Ptr message) {
+	bot.getEvents().onAnyMessage([&bot](Message::Ptr message) {
 		if (message->chat->id == adminid && usserStates[message->chat->id] == AWAITING_RESPONSE_MESSAGE) {
-			std::string responseMessage = message->text;
+			string responseMessage = message->text;
 			bot.getApi().sendMessage(currentRespondUserId, "Ответ от поддержки: " + responseMessage);
 			bot.getApi().sendMessage(message->chat->id, "Ответ отправлен пользователю.");
+
+			// Установка флага answered и удаление inline-кнопки
+			supportRequests[currentRespondUserId].answered = true;
+			bot.getApi().deleteMessage(message->chat->id, message->messageId);
+
 			usserStates[message->chat->id] = NONE;
 		}
 		});
