@@ -1,4 +1,4 @@
-﻿#include <iostream>
+#include <iostream>
 #include <tgbot/tgbot.h>
 #include <unordered_map>
 #include <chrono>
@@ -6,28 +6,15 @@
 #include <fstream>
 #include <curl/curl.h>
 #include <iomanip>
-#include <map>
 #include <boost/filesystem.hpp>
 #pragma execution_character_set("utf-8")
-	
+
 bool inRunning = true;
 using namespace TgBot;
 using namespace std;
 namespace fs = boost::filesystem;
 
 const int64_t adminid = 1217311673; // Айди админа
-
-
-
-
-
-
-
-
-
-
-
-
 //Данные по пользователю
 chrono::time_point<chrono::system_clock> workStart;
 chrono::time_point<chrono::system_clock> breakStart;
@@ -40,7 +27,6 @@ enum class State {
 	FIRST_NAME,
 	LAST_NAME,
 	WORK_START,
-	SUPPORT,
 };
 
 struct UserInfo
@@ -57,46 +43,20 @@ struct UserWork {
 	string mark;
 	string respond;
 };
-
-
-struct WorkSubmission {
-	int64_t userId;
-	string fileId;
-	bool answered;
+enum class AdminState {
+	COMMENT,
+	MARK,
+	DONE,
+	TROUBLE,
+	RESPOND
 };
 
-enum UserState {
-	NONE,
-	AWAITING_SUPPORT_MESSAGE,
-	AWAITING_RESPONSE_MESSAGE,
-	
-};
-enum UserSt {
-	ST_NONE,
-	AWAITING_WORK_SUBMISSION,
-	AWAITING_EVALUATION_MESSAGE
-};
-struct SupportRequest {
-	int64_t userId;
-	string message;
-	bool answered;
-};
-
-
-map<int64_t, WorkSubmission> workSubmissions;
-
-int64_t currentEvaluateUserId = 0;
-unordered_map<int64_t, UserState> usserStates;
-unordered_map<int64_t, UserSt> ASSR;// для хранения состояний пользователей
-unordered_map<int64_t, SupportRequest> supportRequests; // для хранения сообщений поддержки
-int64_t currentRespondUserId = 0;
 unordered_map<int64_t, State> userStates;
+unordered_map<int64_t, AdminState> adminStates;
 unordered_map<int64_t, UserInfo> userInfo;
 unordered_map<int64_t, bool> isHandlingState;
 unordered_map<int64_t, bool> isHandlingAdminState;
 unordered_map<int64_t, UserWork> userWorks;
-unordered_map<int64_t, string> userSupportMessages;
-
 
 void handleState(const Bot& bot, int64_t userId, Message::Ptr message) {
 	switch (userStates[userId]) {
@@ -126,8 +86,31 @@ void handleState(const Bot& bot, int64_t userId, Message::Ptr message) {
 	}
 }
 
+string rewiev = " ";
 
-
+void handleUserWork(const Bot& bot, int64_t userId, Message::Ptr message) {
+	switch (adminStates[userId]) {
+	case AdminState::COMMENT:
+		bot.getApi().sendMessage(userId, "Введите комментарий:");
+		adminStates[userId] = AdminState::MARK;
+		break;
+	case AdminState::MARK:
+		userWorks[adminid].comment = message->text;
+		bot.getApi().sendMessage(userId, "Введите оценку:");
+		adminStates[userId] = AdminState::DONE;
+		break;
+	case AdminState::DONE:
+		userWorks[adminid].mark = message->text;
+		InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
+		InlineKeyboardButton::Ptr button1(new InlineKeyboardButton);
+		button1->text = "Отправить";
+		button1->callbackData = "sendingReview";
+		keyboard->inlineKeyboard.push_back({ button1 });
+		bot.getApi().sendMessage(userId, "Данные сохранены. Отправить пользователю?", false, 0, keyboard);
+		adminStates[userId] = AdminState::COMMENT;
+		break;
+	}
+}
 
 
 size_t WriteToFile(void* ptr, size_t size, size_t nmemb, FILE* stream) {
@@ -166,15 +149,15 @@ void startBreak(Bot& bot, int64_t chatId) {
 }
 string formatWorkTime(chrono::milliseconds duration) {
 	auto hours = chrono::duration_cast<std::chrono::hours>(duration).count();
-	auto minutes = chrono::duration_cast<std::chrono::minutes>(duration % chrono::hours(1)).count();
-	auto seconds = chrono::duration_cast<std::chrono::seconds>(duration % chrono::minutes(1)).count();
+	auto minutes = chrono::duration_cast<std::chrono::minutes>(duration % std::chrono::hours(1)).count();
+	auto seconds = chrono::duration_cast<std::chrono::seconds>(duration % std::chrono::minutes(1)).count();
 	auto milliseconds = duration.count() % 1000;
 	return to_string(hours) + " ч " + to_string(minutes) + " мин " + to_string(seconds) + " сек";
 	ostringstream oss;
-	oss << setfill('0') << setw(2) << hours << ":"
-		<< setfill('0') << setw(2) << minutes << ":"
-		<< setfill('0') << setw(2) << seconds << "."
-		<< setfill('0') << setw(3) << milliseconds;
+	oss << std::setfill('0') << std::setw(2) << hours << ":"
+		<< std::setfill('0') << std::setw(2) << minutes << ":"
+		<< std::setfill('0') << std::setw(2) << seconds << "."
+		<< std::setfill('0') << std::setw(3) << milliseconds;
 	return oss.str();
 }
 void sendWorkingUsersList(Bot& bot, int64_t chatId) {
@@ -229,27 +212,15 @@ void monitorTime(TgBot::Bot& bot, int64_t chatId) {
 
 int main()
 {
-	bool acceptingFiles = false;
+
 	int availablebreak = 60;
 	int startingi = 1;
 	Bot bot("7203022991:AAHgQgzs7g0scjPS1zX2xAzL_ZQpTwsie5Q");
-
-
-
 	bot.getEvents().onCommand("start", [&bot](Message::Ptr message) {
-
-		if (message->from->id == adminid)
-		{
-			bot.getApi().sendMessage(adminid, "Для администратора не требуется команда /start");
-		}
-		else
-		{
-			int64_t userId = message->from->id;
-			userStates[userId] = State::START;
-			handleState(bot, userId, message);
-		}
-
-		});
+		int64_t userId = message->from->id;
+		userStates[userId] = State::START;
+		handleState(bot, userId, message);
+	});
 
 	bot.getEvents().onAnyMessage([&bot](TgBot::Message::Ptr message) {
 		int64_t userId = message->from->id;
@@ -259,7 +230,7 @@ int main()
 				isHandlingState[userId] = false; // Отключение обработчика после последнего состояния
 			}
 		}
-		});
+	});
 	int64_t lastUpdateId = 0;
 	vector<Update::Ptr> updates = bot.getApi().getUpdates();
 	for (const auto& update : updates) {
@@ -269,155 +240,41 @@ int main()
 	}
 
 
+	bot.getEvents().onCommand("work", [&bot](Message::Ptr message) {
+		int64_t userId = message->from->id;
+		if (userId == adminid) {
+			adminStates[userId] = AdminState::COMMENT;
+			handleUserWork(bot, userId, message);
+		}
+		else {
+			bot.getApi().sendMessage(userId, "Вы не являетесь администратором.");
+		}
+		});
+	bot.getEvents().onAnyMessage([&bot](Message::Ptr message) {
+		int64_t userId = message->from->id;
 
-
-
-
-
-
-	bot.getEvents().onCommand("submitwork", [&bot, &acceptingFiles](Message::Ptr message) {
-		ASSR[message->chat->id] = AWAITING_WORK_SUBMISSION;
-		acceptingFiles = true;
-		bot.getApi().sendMessage(message->chat->id, "Пожалуйста, отправьте ваш документ для оценки.");
+		if (adminStates.find(userId) != adminStates.end()) {
+			handleUserWork(bot, userId, message);
+		}
 	});
-
-
-
-
-
-
-
-
-	bot.getEvents().onCommand("evaluate", [&bot](Message::Ptr message) {
-		if (message->chat->id != adminid) {
-			bot.getApi().sendMessage(message->chat->id, "Эта команда доступна только для админа.");
-			return;
-		}
-
-		// Создание inline-кнопок для выбора пользователя
-		InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
-		vector<InlineKeyboardButton::Ptr> row;
-		for (const auto& submission : workSubmissions) {
-			if (!submission.second.answered) { // добавление кнопки только если ответ не был отправлен
-				InlineKeyboardButton::Ptr button(new InlineKeyboardButton);
-				button->text = "ID: " + to_string(submission.first);
-				button->callbackData = to_string(submission.first);
-				row.push_back(button);
-			}
-		}
-		keyboard->inlineKeyboard.push_back(row);
-
-		bot.getApi().sendMessage(message->chat->id, "Пожалуйста, выберите пользователя, чью работу вы хотите оценить:", false, 0, keyboard);
-		});
-
-	// Обработка нажатий inline-кнопок
 	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
-		if (query->message->chat->id == adminid) {
-			currentEvaluateUserId = stoll(query->data);
-			if (workSubmissions.find(currentEvaluateUserId) != workSubmissions.end()) {
-				ASSR[query->message->chat->id] = AWAITING_EVALUATION_MESSAGE;
-				bot.getApi().sendMessage(query->message->chat->id, "Введите вашу оценку и отзыв для пользователя с ID " + to_string(currentEvaluateUserId) + ".");
+		int64_t adminId = query->from->id;
+		if (query->data == "sendingReview") {
+			string comment = userWorks[adminid].comment;
+			string mark = userWorks[adminid].mark;
+			try {
+				bot.getApi().sendMessage(userInfo[adminId].userid, "Комментарий: " + comment + "\nОценка: " + mark);
+				bot.getApi().sendMessage(adminId, "Оценка и комментарий отправлены пользователю.");
 			}
-			else {
-				bot.getApi().sendMessage(query->message->chat->id, "Задание от пользователя с ID " + to_string(currentEvaluateUserId) + " не найдено.");
-			}
-		}
-		});
-
-	// Обработка текстовых сообщений от админа
-	bot.getEvents().onAnyMessage([&bot](Message::Ptr message) {
-		if (message->chat->id == adminid && usserStates[message->chat->id] == AWAITING_EVALUATION_MESSAGE) {
-			string evaluationMessage = message->text;
-			bot.getApi().sendMessage(currentEvaluateUserId, "Оценка и отзыв: " + evaluationMessage);
-			bot.getApi().sendMessage(message->chat->id, "Оценка и отзыв отправлены пользователю.");
-
-			// Установка флага answered
-			workSubmissions[currentEvaluateUserId].answered = true;
-
-			ASSR[message->chat->id] = ST_NONE;
-		}
-		});
-
-
-
-
-	bot.getEvents().onCommand("support", [&bot](Message::Ptr message) {
-		usserStates[message->chat->id] = AWAITING_SUPPORT_MESSAGE;
-		bot.getApi().sendMessage(message->chat->id, "Пожалуйста, введите ваше сообщение для поддержки.");
-		});
-
-	// Обработка текстовых сообщений пользователей
-	bot.getEvents().onAnyMessage([&bot](Message::Ptr message) {
-		if (usserStates[message->chat->id] == AWAITING_SUPPORT_MESSAGE) {
-			string supportMessage = message->text;
-			supportRequests[message->chat->id] = { message->chat->id, supportMessage };
-			usserStates[message->chat->id] = NONE;
-
-			bot.getApi().sendMessage(adminid, "Новое обращение в поддержку от пользователя " + to_string(message->chat->id) + ": " + supportMessage);
-			bot.getApi().sendMessage(message->chat->id, "Ваше сообщение отправлено в поддержку. Ожидайте ответа.");
-		}
-		});
-
-	// Команда /respond для админа
-	bot.getEvents().onCommand("respond", [&bot](Message::Ptr message) {
-		if (message->chat->id != adminid) {
-			bot.getApi().sendMessage(message->chat->id, "Эта команда доступна только для админа.");
-			return;
-		}
-
-		// Создание inline-кнопок для выбора пользователя
-		InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
-		vector<InlineKeyboardButton::Ptr> row;
-		for (const auto& request : supportRequests) {
-			if (!request.second.answered) { // добавление кнопки только если ответ не был отправлен
-				InlineKeyboardButton::Ptr button(new InlineKeyboardButton);
-				button->text = "ID: " + to_string(request.first);
-				button->callbackData = to_string(request.first);
-				row.push_back(button);
+			catch (TgException& e) {
+				bot.getApi().sendMessage(adminId, "Ошибка при отправке сообщения пользователю: " + string(e.what()));
 			}
 		}
-		keyboard->inlineKeyboard.push_back(row);
-
-		bot.getApi().sendMessage(message->chat->id, "Пожалуйста, выберите пользователя, которому вы хотите ответить:", false, 0, keyboard);
-		});
-
-	// Обработка нажатий inline-кнопок
-	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
-		if (query->message->chat->id == adminid) {
-			currentRespondUserId = stoll(query->data);
-			if (supportRequests.find(currentRespondUserId) != supportRequests.end()) {
-				usserStates[query->message->chat->id] = AWAITING_RESPONSE_MESSAGE;
-				bot.getApi().sendMessage(query->message->chat->id, "Введите ваш ответ пользователю с ID " + to_string(currentRespondUserId) + ".");
-			}
-			else {
-				bot.getApi().sendMessage(query->message->chat->id, "Обращение от пользователя с ID " + to_string(currentRespondUserId) + " не найдено.");
-			}
-		}
-		});
-
-	// Обработка текстовых сообщений от админа
-	bot.getEvents().onAnyMessage([&bot](Message::Ptr message) {
-		if (message->chat->id == adminid && usserStates[message->chat->id] == AWAITING_RESPONSE_MESSAGE) {
-			string responseMessage = message->text;
-			bot.getApi().sendMessage(currentRespondUserId, "Ответ от поддержки: " + responseMessage);
-			bot.getApi().sendMessage(message->chat->id, "Ответ отправлен пользователю.");
-
-			// Установка флага answered и удаление inline-кнопки
-			supportRequests[currentRespondUserId].answered = true;
-			bot.getApi().deleteMessage(message->chat->id, message->messageId);
-
-			usserStates[message->chat->id] = NONE;
-		}
-		});
-
-
-
-
+	});
 	
-
-
-
-
+	
+	
+	
 	//Начало рабочего дня
 	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
 		if (query->data == "start")
@@ -436,7 +293,6 @@ int main()
 			bot.getApi().sendMessage(query->message->chat->id, "Работа началась.", false, 0, keyboard);
 			bot.getApi().answerCallbackQuery(query->id, " ", false);
 			searching = true;
-			src = true;
 			thread searchThread(performSearch, ref(bot));
 			searchThread.detach();
 
@@ -742,7 +598,7 @@ int main()
 		});
 
 
-	
+	bool acceptingFiles = false;
 
 
 	bot.getEvents().onCallbackQuery([&bot, &acceptingFiles](CallbackQuery::Ptr query) {
@@ -751,7 +607,7 @@ int main()
 		{
 			//searching = false;
 			acceptingFiles = true;
-			ASSR[query->message->chat->id] = AWAITING_WORK_SUBMISSION;
+
 			bot.getApi().sendMessage(query->message->chat->id, "Рабочий день окончен, отправьте файлы для оценки");
 		}
 
@@ -764,256 +620,253 @@ int main()
 	bot.getEvents().onAnyMessage([&bot, &acceptingFiles, &messagdde](Message::Ptr message) {
 
 		if ((acceptingFiles) && (message->document)) {
-			if (ASSR[message->chat->id] == AWAITING_WORK_SUBMISSION) {
-				string fileId = message->document->fileId;
-				cout << "Received file ID: " << fileId << endl;
-				File::Ptr file = bot.getApi().getFile(fileId);
-				if (!file) {
-					bot.getApi().sendMessage(message->chat->id, "Failed to get file info.");
-					return;
-				}
+			string fileId = message->document->fileId;
+			cout << "Received file ID: " << fileId << endl;
+			File::Ptr file = bot.getApi().getFile(fileId);
+			if (!file) {
+				bot.getApi().sendMessage(message->chat->id, "Failed to get file info.");
+				return;
+			}
 
-				string fileUrl = "https://api.telegram.org/file/bot" + bot.getToken() + "/" + file->filePath;
-				cout << "File URL: " << fileUrl << std::endl;
+			string fileUrl = "https://api.telegram.org/file/bot" + bot.getToken() + "/" + file->filePath;
+			cout << "File URL: " << fileUrl << std::endl;
 
-				// Получаем имя файла из сообщения
-				string fileName = message->document->fileName;
+			// Получаем имя файла из сообщения
+			string fileName = message->document->fileName;
 
-				int64_t userId = message->chat->id;
-				string extension = fileName.substr(fileName.find_last_of('.') + 1);
-				string name = userInfo[userId].firstname;
+			int64_t userId = message->chat->id;
+			string extension = fileName.substr(fileName.find_last_of('.') + 1);
+			string name = userInfo[userId].firstname;
 
-				int64_t id = message->chat->id;
-				string idinStroke = to_string(id);
-				string formatt = userInfo[userId].firstname + "--" + userInfo[userId].lastname + " ";
+			int64_t id = message->chat->id;
+			string idinStroke = to_string(id);
+			string formatt = userInfo[userId].firstname + "--" + userInfo[userId].lastname + " ";
 
-				// Путь к папке, где сохранятся файлы
-				string localFolderPath = "incoming_files//";
+			// Путь к папке, где сохранятся файлы
+			string localFolderPath = "incoming_files//";
 
-				localFolderPath += formatt;
-
-
-				// تنسيقات الفيديو
-				if (extension == "cpp") {
-					localFolderPath += "C++-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "py") {
-					localFolderPath += "python-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				//تنسيقات النص
-				if (extension == "docx") {
-					localFolderPath += "docx-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "txt") {
-					localFolderPath += "txt-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "mp4") {
-					localFolderPath += "mp4-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "avi") {
-					localFolderPath += "avi-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "mkv") {
-					localFolderPath += "mkv-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "wmv") {
-					localFolderPath += "wmv-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "plv") {
-					localFolderPath += "plv-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "mov") {
-					localFolderPath += "mov-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "webm") {
-					localFolderPath += "webm-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "mpeg") {
-					localFolderPath += "mpeg-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "3gp") {
-					localFolderPath += "3gp-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "m4v") {
-					localFolderPath += "m4v-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "mxf") {
-					localFolderPath += "mxf-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "xavc") {
-					localFolderPath += "xavc-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "pdf") {
-					localFolderPath += "pdf-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "js") {
-					localFolderPath += "javascript-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				//تنسيقات الصور
-				if (extension == "jpg") {
-					localFolderPath += "jpg-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "jpeg") {
-					localFolderPath += "jpeg-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "png") {
-					localFolderPath += "png-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "psd") {
-					localFolderPath += "photoshop-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "ai") {
-					localFolderPath += "Adobe-Illustrator-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "indd") {
-					localFolderPath += "Adobe-InDesign Document-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "prproj") {
-					localFolderPath += "Adobe-Premiere-Pro-Project-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "aep") {
-					localFolderPath += "After-Effects-Project-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "sesx") {
-					localFolderPath += "Adobe-Audition-Session-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				//تنسيقات الويب
-				if (extension == "html") {
-					localFolderPath += "HTML-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "css") {
-					localFolderPath += "CSS-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "cs") {
-					localFolderPath += "C#-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-				if (extension == "java") {
-					localFolderPath += "Java-files//";
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}
-
-				/*else {
-					cout << "Other File";
-					localFolderPath += "others//";
-					// Папка для других файлов
-					if (!fs::exists(localFolderPath)) {
-						fs::create_directories(localFolderPath);
-					}
-				}*/
+			localFolderPath += formatt;
 
 
-
-				string localFilePath = localFolderPath + fileName;
-
-				if (downloadFile(fileUrl, localFilePath)) {
-					cout << "File downloaded successfully!";
-					string workTimeStr = formatWorkTime(totalWorkTime);
-					bot.getApi().sendMessage(adminid, "Пользователь " + userInfo[userId].firstname + " " + userInfo[userId].lastname + " отправил документ: " + fileName + "\n" + messagdde + "Общее время работы: " + workTimeStr);
-					bot.getApi().sendDocument(adminid, fileId);
-
-					workSubmissions[message->chat->id] = { message->chat->id, fileId, false };
-					ASSR[message->chat->id] = ST_NONE;
-
-
-					bot.getApi().sendMessage(message->chat->id, "Ваша работа принята. Ожидайте оценки и комментария.");
-					bot.getApi().sendMessage(userId, "Документ успешно отправлен администратору.");
+			// تنسيقات الفيديو
+			if (extension == "cpp") {
+				localFolderPath += "C++-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
 				}
-				else {
-					cout << "Failed to download the file.";
-					bot.getApi().sendMessage(userId, "Ошибка при загрузке документа.");
+			}
+			if (extension == "py") {
+				localFolderPath += "python-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
 				}
+			}
+			//تنسيقات النص
+			if (extension == "docx") {
+				localFolderPath += "docx-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "txt") {
+				localFolderPath += "txt-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "mp4") {
+				localFolderPath += "mp4-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "avi") {
+				localFolderPath += "avi-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "mkv") {
+				localFolderPath += "mkv-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "wmv") {
+				localFolderPath += "wmv-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "plv") {
+				localFolderPath += "plv-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "mov") {
+				localFolderPath += "mov-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "webm") {
+				localFolderPath += "webm-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "mpeg") {
+				localFolderPath += "mpeg-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "3gp") {
+				localFolderPath += "3gp-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "m4v") {
+				localFolderPath += "m4v-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "mxf") {
+				localFolderPath += "mxf-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "xavc") {
+				localFolderPath += "xavc-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "pdf") {
+				localFolderPath += "pdf-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "js") {
+				localFolderPath += "javascript-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			//تنسيقات الصور
+			if (extension == "jpg") {
+				localFolderPath += "jpg-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "jpeg") {
+				localFolderPath += "jpeg-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "png") {
+				localFolderPath += "png-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "psd") {
+				localFolderPath += "photoshop-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "ai") {
+				localFolderPath += "Adobe-Illustrator-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "indd") {
+				localFolderPath += "Adobe-InDesign Document-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "prproj") {
+				localFolderPath += "Adobe-Premiere-Pro-Project-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "aep") {
+				localFolderPath += "After-Effects-Project-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "sesx") {
+				localFolderPath += "Adobe-Audition-Session-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			//تنسيقات الويب
+			if (extension == "html") {
+				localFolderPath += "HTML-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "css") {
+				localFolderPath += "CSS-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "cs") {
+				localFolderPath += "C#-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+			if (extension == "java") {
+				localFolderPath += "Java-files//";
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}
+
+			/*else {
+				cout << "Other File";
+				localFolderPath += "others//";
+				// Папка для других файлов
+				if (!fs::exists(localFolderPath)) {
+					fs::create_directories(localFolderPath);
+				}
+			}*/
+
+
+			// Полный путь к сохраняемому файлу
+			string localFilePath = localFolderPath + fileName;
+
+			if (downloadFile(fileUrl, localFilePath)) {
+				cout << "File downloaded successfully!";
+				string workTimeStr = formatWorkTime(totalWorkTime);
+				bot.getApi().sendMessage(adminid, "Пользователь " + userInfo[userId].firstname + " " + userInfo[userId].lastname + " отправил документ: " + fileName + "\n" + messagdde + "Общее время работы: " + workTimeStr);
+				bot.getApi().sendDocument(adminid, fileId);
+
+
+
+
+				bot.getApi().sendMessage(message->chat->id, "Ваша работа принята. Ожидайте оценки и комментария.");
+				bot.getApi().sendMessage(userId, "Документ успешно отправлен администратору.");
+			}
+			else {
+				cout << "Failed to download the file.";
+				bot.getApi().sendMessage(userId, "Ошибка при загрузке документа.");
 			}
 		}
 		});
