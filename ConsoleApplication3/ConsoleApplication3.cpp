@@ -6,7 +6,7 @@
 #include <fstream>
 #include <curl/curl.h>
 #include <iomanip>
-#include <map>
+
 #include <boost/filesystem.hpp>
 #pragma execution_character_set("utf-8")
 
@@ -39,28 +39,8 @@ struct UserInfo
 	string lastname;
 };
 
-
 unordered_map<int64_t, bool> userStatus;
 
-// Функция закрытия работы для пользователя
-void closeUserWork(int64_t userId) {
-	userStatus[userId] = false; // false означает, что работа закрыта
-}
-
-// Функция проверки, открыта ли работа пользователя
-bool isUserWorkOpen(int64_t userId) {
-	auto it = userStatus.find(userId);
-	if (it != userStatus.end()) {
-		return it->second; // возвращаем статус работы
-	}
-	return true; // если пользователь не найден, считаем, что работа открыта
-}
-
-bool isAdmin(int64_t userId) {
-	// Здесь добавьте проверку, является ли пользователь администратором
-	// Например, сравнивая userId с предустановленным значением
-	return userId == adminid; // Замените <admin_user_id> на ID администратора
-}
 enum UserWorkState {
 	WORK_NONE,
 	AWAITING_WORK_SUBMISSION,
@@ -78,7 +58,6 @@ enum UserState {
 	AWAITING_RESPONSE_MESSAGE,
 	WORK_UNDER_REVIEW,
 	WORK_STOPPED,
-	
 };
 
 struct SupportRequest {
@@ -87,20 +66,17 @@ struct SupportRequest {
 	bool answered;
 };
 
-
-
 unordered_map<int64_t, SupportRequest> supportRequests; // для хранения сообщений поддержки
 unordered_map<int64_t, WorkSubmission> workSubmissions;
 int64_t currentEvaluateUserId = 0;
 unordered_map<int64_t, UserState> usserStates;
-unordered_map<int64_t, UserWorkState> userWorkStates;// для хранения состояний пользователей 
+unordered_map<int64_t, UserWorkState> userWorkStates;// для хранения состояний пользователей
 int64_t currentRespondUserId = 0;
 unordered_map<int64_t, State> userStates;
 unordered_map<int64_t, UserInfo> userInfo;
 unordered_map<int64_t, bool> isHandlingState;
-unordered_map<int64_t, bool> isHandlingAdminState; 
+unordered_map<int64_t, bool> isHandlingAdminState;
 unordered_map<int64_t, string> userSupportMessages; // для хранения сообщений поддержки
-
 
 void handleState(const Bot& bot, int64_t userId, Message::Ptr message) {
 	switch (userStates[userId]) {
@@ -130,10 +106,6 @@ void handleState(const Bot& bot, int64_t userId, Message::Ptr message) {
 	}
 }
 
-
-
-
-
 size_t WriteToFile(void* ptr, size_t size, size_t nmemb, FILE* stream) {
 	size_t written = fwrite(ptr, size, nmemb, stream);
 	return written;
@@ -161,13 +133,6 @@ bool downloadFile(const std::string& url, const std::string& outFile) {
 	return false;
 }
 
-void startBreak(Bot& bot, int64_t chatId) {
-	this_thread::sleep_for(chrono::minutes(50));
-	bot.getApi().sendMessage(chatId, "Перерыв окончится через 10 минут.");
-	this_thread::sleep_for(chrono::minutes(10));
-	bot.getApi().sendMessage(chatId, "Перерыв закончился. Возобновите работу командой 'Начать'.");
-	onBreak = false;
-}
 string formatWorkTime(chrono::milliseconds duration) {
 	auto hours = chrono::duration_cast<std::chrono::hours>(duration).count();
 	auto minutes = chrono::duration_cast<std::chrono::minutes>(duration % chrono::hours(1)).count();
@@ -209,12 +174,6 @@ void performSearch(Bot& bot) {
 	}
 }
 
-
-
-
-
-
-
 //التحقق من مدة عمل البوت !!!!
 void monitorTime(TgBot::Bot& bot, int64_t chatId) {
 	while (src) {
@@ -238,22 +197,18 @@ int main()
 	int startingi = 1;
 	Bot bot("7203022991:AAHgQgzs7g0scjPS1zX2xAzL_ZQpTwsie5Q");
 
-
 	//Команда /start
 	bot.getEvents().onCommand("start", [&bot](Message::Ptr message) {
-
 		if (message->from->id == adminid)
 		{
 			bot.getApi().sendMessage(adminid, "Для администратора не требуется команда /start");
 		}
 		else
 		{
-			
 			int64_t userId = message->from->id;
 			userStates[userId] = State::START;
 			handleState(bot, userId, message);
 		}
-
 		});
 
 	bot.getEvents().onAnyMessage([&bot](TgBot::Message::Ptr message) {
@@ -273,22 +228,11 @@ int main()
 		}
 	}
 
-
-
-
-
-
-	bot.getEvents().onCommand("submitwork", [&bot, &acceptingFiles](Message::Ptr message) {
-		userWorkStates[message->chat->id] = AWAITING_WORK_SUBMISSION;
-		acceptingFiles = true;
-		bot.getApi().sendMessage(message->chat->id, "Пожалуйста, отправьте ваш документ для оценки.");
-	});
-
-
-
-
-
-
+	//bot.getEvents().onCommand("submitwork", [&bot, &acceptingFiles](Message::Ptr message) {
+	//	userWorkStates[message->chat->id] = AWAITING_WORK_SUBMISSION;
+	//	acceptingFiles = true;
+	//	bot.getApi().sendMessage(message->chat->id, "Пожалуйста, отправьте ваш документ для оценки.");
+	//	});
 
 	// Команда /evaluate
 	bot.getEvents().onCommand("evaluate", [&bot](Message::Ptr message) {
@@ -327,10 +271,10 @@ int main()
 		keyboard->inlineKeyboard.push_back(row);
 
 		bot.getApi().sendMessage(message->chat->id, "Пожалуйста, выберите пользователя, чью работу вы хотите оценить:", false, 0, keyboard);
-	});
+		});
 
 	// Обработка нажатий inline-кнопок для оценки работ
-		bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
+	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
 		if (query->message->chat->id == adminid && userWorkStates[query->message->chat->id] != AWAITING_RESPONSE_MESSAGE) {
 			int64_t tempId = stoll(query->data);
 			int64_t varId = tempId -= 1;
@@ -338,9 +282,6 @@ int main()
 			if (workSubmissions.find(currentEvaluateUserId) != workSubmissions.end()) {
 				userWorkStates[query->message->chat->id] = AWAITING_EVALUATION_MESSAGE;
 				bot.getApi().sendMessage(query->message->chat->id, "Введите вашу оценку и отзыв для пользователя с ID " + to_string(currentEvaluateUserId) + ".");
-			}
-			else {
-				bot.getApi().sendMessage(query->message->chat->id, "Задание от пользователя с ID " + to_string(currentEvaluateUserId) + " не найдено.");
 			}
 		}
 		});
@@ -357,13 +298,11 @@ int main()
 		}
 		});
 
-		
-
 	bot.getEvents().onCommand("support", [&bot](Message::Ptr message) {
 		usserStates[message->chat->id] = AWAITING_SUPPORT_MESSAGE;
-		
+
 		bot.getApi().sendMessage(message->chat->id, "Пожалуйста, введите ваше сообщение для поддержки.");
-	});
+		});
 
 	// Обработка текстовых сообщений пользователей
 	bot.getEvents().onAnyMessage([&bot](Message::Ptr message) {
@@ -402,20 +341,13 @@ int main()
 
 	// Обработка нажатий inline-кнопок для поддержки
 	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
-		
-		
 		if (query->message->chat->id == adminid && usserStates[query->message->chat->id] != AWAITING_EVALUATION_MESSAGE) {
 			currentRespondUserId = stoll(query->data);
 			if (supportRequests.find(currentRespondUserId) != supportRequests.end()) {
 				usserStates[query->message->chat->id] = AWAITING_RESPONSE_MESSAGE;
 				bot.getApi().sendMessage(query->message->chat->id, "Введите ваш ответ пользователю с ID " + to_string(currentRespondUserId) + ".");
 			}
-			else {
-				bot.getApi().sendMessage(query->message->chat->id, "Обращение от пользователя с ID " + to_string(currentRespondUserId) + " не найдено.");
-			}
 		}
-		
-		
 		});
 
 	// Обработка текстовых сообщений от админа
@@ -424,77 +356,16 @@ int main()
 			string responseMessage = message->text;
 			bot.getApi().sendMessage(currentRespondUserId, "Ответ от поддержки: " + responseMessage);
 			bot.getApi().sendMessage(message->chat->id, "Ответ отправлен пользователю.");
-			
+
 			supportRequests[currentRespondUserId].answered = true;
 			usserStates[message->chat->id] = NONE;
-			
 		}
 		});
-
-
-
-
-
-
-
-
-	bot.getEvents().onCommand("stop_user", [&bot](Message::Ptr message) {
-		if (isAdmin(message->chat->id)) {
-			// Получаем ID пользователя из команды
-			istringstream iss(message->text);
-			string command;
-			int64_t userId;
-			iss >> command >> userId;
-
-			if (userWorkStates.find(userId) != userWorkStates.end() && userWorkStates[userId] == WORK_UNDER_REVIEW) {
-				usserStates[userId] = WORK_STOPPED;
-				bot.getApi().sendMessage(userId, "Ваша работа была остановлена администратором.");
-				bot.getApi().sendMessage(message->chat->id, "Работа пользователя остановлена.");
-			}
-			else {
-				bot.getApi().sendMessage(message->chat->id, "Пользователь не найден или его работа не находится в стадии проверки.");
-			}
-		}
-		else {
-			bot.getApi().sendMessage(message->chat->id, "У вас нет прав для выполнения этой команды.");
-		}
-		});
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	
-
-
-
 
 	//Начало рабочего дня
 	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
 		if (query->data == "start")
 		{
-			
-			
 			int64_t userId = query->message->chat->id;
 			userStatus[userId] = true;
 			cout << userInfo[userId].userid;
@@ -517,17 +388,10 @@ int main()
 			// تشغيل موضوع للتحقق من الوقت
 			thread monitorThread(monitorTime, ref(bot), query->message->chat->id);
 			monitorThread.detach();
-
 		}
 		});
 
-
 	bot.getEvents().onCommand("close", [&bot](Message::Ptr message) {
-
-
-
-
-
 		});
 
 	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
@@ -556,8 +420,6 @@ int main()
 			bot.getApi().sendMessage(query->message->chat->id, "Перерыв начался.", false, 0, perestop);
 			bot.getApi().answerCallbackQuery(query->id, " ", false);
 
-			// Запускаем отдельный поток для отсчета времени перерыва
-			//thread(startBreak, std::ref(bot), query->message->chat->id).detach();
 		}
 		});
 	string messagdde = " ";
@@ -571,7 +433,6 @@ int main()
 
 			string workTimeStr = formatWorkTime(totalWorkTime);
 			messagdde = "Общее время работы: " + workTimeStr;
-			bot.getApi().sendMessage(query->message->chat->id, messagdde);
 			bot.getApi().answerCallbackQuery(query->id, "Перерыв окончится через 10 минут.", false);
 			InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
 			InlineKeyboardButton::Ptr button(new InlineKeyboardButton);
@@ -583,7 +444,7 @@ int main()
 			button1->callbackData = "end";
 			keyboard->inlineKeyboard.push_back({ button1 });
 			thread([&bot, chat_id = query->message->chat->id, keyboard]() {
-				this_thread::sleep_for(chrono::minutes(1));
+				this_thread::sleep_for(chrono::minutes(10));
 				bot.getApi().sendMessage(chat_id, "Перерыв закончился. Возобновите работу нажав Продолжить работу", false, 0, keyboard);
 				onBreak = false;
 				}).detach();
@@ -701,7 +562,6 @@ int main()
 	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
 		if (query->data == "continue")
 		{
-
 			searching = true;
 			thread searchThread(performSearch, ref(bot));
 			searchThread.detach();
@@ -815,12 +675,7 @@ int main()
 		}
 		});
 
-
-	
-
-
 	bot.getEvents().onCallbackQuery([&bot, &acceptingFiles](CallbackQuery::Ptr query) {
-
 		if (query->data == "end")
 		{
 			//searching = false;
@@ -828,19 +683,14 @@ int main()
 			userWorkStates[query->message->chat->id] = AWAITING_WORK_SUBMISSION;
 			bot.getApi().sendMessage(query->message->chat->id, "Рабочий день окончен, отправьте файлы для оценки");
 		}
-
 		});
-
-
-
-
 
 	bot.getEvents().onAnyMessage([&bot, &acceptingFiles, &messagdde](Message::Ptr message) {
 		int64_t userId = message->from->id;
 		if (userWorkStates[userId] == WORK_STOPPED) {
 			bot.getApi().sendMessage(userId, "Ваша работа была остановлена администратором. Пожалуйста, свяжитесь с администратором для дальнейших инструкций.");
 			return; // Прекращаем обработку других сообщений для этого пользователя
-		}	
+		}
 		if ((acceptingFiles) && (message->document)) {
 			if (userWorkStates[message->chat->id] == AWAITING_WORK_SUBMISSION) {
 				string fileId = message->document->fileId;
@@ -869,7 +719,6 @@ int main()
 				string localFolderPath = "incoming_files//";
 
 				localFolderPath += formatt;
-
 
 				// تنسيقات الفيديو
 				if (extension == "cpp") {
@@ -1070,28 +919,17 @@ int main()
 						fs::create_directories(localFolderPath);
 					}
 				}*/
-				
-				InlineKeyboardMarkup::Ptr keyboard(new InlineKeyboardMarkup);
-				vector<InlineKeyboardButton::Ptr> row;
-				InlineKeyboardButton::Ptr stopButton(new InlineKeyboardButton);
-				stopButton->text = "Остановить работу пользователя";
-				stopButton->callbackData = "stop_user_" + to_string(userId);
-				row.push_back(stopButton);
-				keyboard->inlineKeyboard.push_back(row);
-
 
 				string localFilePath = localFolderPath + fileName;
 
 				if (downloadFile(fileUrl, localFilePath)) {
-					usserStates[userId] = WORK_UNDER_REVIEW;
 					cout << "File downloaded successfully!";
 					string workTimeStr = formatWorkTime(totalWorkTime);
-					bot.getApi().sendMessage(adminid, "Пользователь " + userInfo[userId].firstname + " " + userInfo[userId].lastname + " отправил документ: " + fileName + "\n" + messagdde + "Общее время работы: " + workTimeStr, false, 0, keyboard);
+					bot.getApi().sendMessage(adminid, "Пользователь " + userInfo[userId].firstname + " " + userInfo[userId].lastname + " отправил документ: " + fileName + "\n" + messagdde + "Общее время работы: " + workTimeStr);
 					bot.getApi().sendDocument(adminid, fileId);
 					usserStates[userId] = WORK_UNDER_REVIEW;
 					workSubmissions[message->chat->id] = { message->chat->id, fileId, false };
 					userWorkStates[message->chat->id] = WORK_NONE;
-
 
 					bot.getApi().sendMessage(message->chat->id, "Ваша работа принята. Ожидайте оценки и комментария.");
 					bot.getApi().sendMessage(userId, "Документ успешно отправлен администратору.");
@@ -1104,15 +942,6 @@ int main()
 		}
 		});
 
-	bot.getEvents().onCallbackQuery([&bot](CallbackQuery::Ptr query) {
-		if (query->data.substr(0, 9) == "stop_user") {
-			int64_t userId = stoll(query->data.substr(10));
-			usserStates[userId] = WORK_STOPPED;
-			bot.getApi().sendMessage(userId, "Ваша работа была остановлена администратором.");
-			bot.getApi().sendMessage(query->message->chat->id, "Работа пользователя остановлена.");
-		}
-	});
-
 	//команда стоп которая доступная только для администратора
 	bot.getEvents().onCommand("stop", [&bot, &startingi](Message::Ptr message) {
 		if (message->from->id == adminid) {
@@ -1124,7 +953,7 @@ int main()
 			bot.getApi().sendMessage(message->chat->id, "У вас недостаточно прав для совершения данной операции");
 		}
 		});
-	//команда список, показывается кто работает именно сейчас 
+	//команда список, показывается кто работает именно сейчас
 	bot.getEvents().onCommand("list", [&bot](TgBot::Message::Ptr message) {
 		if (message->from->id == adminid) {
 			sendWorkingUsersList(bot, message->chat->id);
@@ -1133,16 +962,6 @@ int main()
 			bot.getApi().sendMessage(message->chat->id, "У вас нет прав для выполнения этой команды.");
 		}
 		});
-
-
-
-
-
-
-
-
-
-
 
 	//запуск бота
 	try {
